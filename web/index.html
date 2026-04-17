@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Ane Racing PRO</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <div id="viewport">
+      <canvas id="game" width="1280" height="720"></canvas>
+      <div id="ui" class="ui-overlay">
+      <header class="ui-header">
+        <h1 class="brand-title">
+          <span class="brand-shimmer">Ane Racing</span>
+          <span class="brand-pro">PRO</span>
+        </h1>
+        <p class="tagline">
+          WASD · <strong>Shift</strong> handbrake · <strong>F</strong> / <strong>E</strong> /
+          <strong>C</strong> weapons · <strong>R</strong> + <strong>Enter</strong> restart
+        </p>
+      </header>
+      <aside class="pickup-legend panel" aria-label="Pickup guide">
+        <div class="label">Track pickups</div>
+        <ul class="pickup-legend-list">
+          <li>
+            <span class="lg h">H</span>
+            <span><strong>Repair</strong> +38 HP (cap at max)</span>
+          </li>
+          <li>
+            <span class="lg h2">!</span>
+            <span><strong>Full repair</strong> to 100% HP</span>
+          </li>
+          <li>
+            <span class="lg p">P</span>
+            <span><strong>Plasma</strong> ammo — <kbd>F</kbd> forward shots</span>
+          </li>
+          <li>
+            <span class="lg b">B</span>
+            <span><strong>Plasma burst</strong> +40 ammo</span>
+          </li>
+          <li>
+            <span class="lg m">M</span>
+            <span><strong>Missile</strong> — <kbd>E</kbd> heat-seeker</span>
+          </li>
+          <li>
+            <span class="lg r">R</span>
+            <span><strong>Missile rack</strong> +2</span>
+          </li>
+          <li>
+            <span class="lg d">D</span>
+            <span><strong>Mines</strong> +2 — <kbd>C</kbd> drop behind you</span>
+          </li>
+          <li>
+            <span class="lg x">X</span>
+            <span><strong>Mine cluster</strong> +4 mines</span>
+          </li>
+          <li>
+            <span class="lg n">N</span>
+            <span><strong>Nitro</strong> short boost (~2.6s)</span>
+          </li>
+          <li>
+            <span class="lg t">T</span>
+            <span><strong>Turbo nitro</strong> longer burn (~4.2s)</span>
+          </li>
+          <li>
+            <span class="lg s">S</span>
+            <span><strong>Shield</strong> ~5s — less damage</span>
+          </li>
+          <li>
+            <span class="lg s8">8</span>
+            <span><strong>Heavy shield</strong> ~8s — stronger</span>
+          </li>
+        </ul>
+      </aside>
+      <div class="hud">
+        <div class="panel highlight">
+          <div class="label">Place</div>
+          <div id="place-display" class="value">—</div>
+        </div>
+        <div class="panel">
+          <div class="label">Lap</div>
+          <div id="lap-display" class="value">1 / 3</div>
+        </div>
+        <div class="panel wide">
+          <div class="label">Current</div>
+          <div id="current-time" class="value mono">--:--.--</div>
+        </div>
+        <div class="panel wide">
+          <div class="label">Last lap</div>
+          <div id="last-lap" class="value mono">--:--.--</div>
+        </div>
+        <div class="panel wide highlight">
+          <div class="label">Best lap</div>
+          <div id="best-lap" class="value mono">--:--.--</div>
+        </div>
+      </div>
+      <div class="hud hud-combat">
+        <div class="panel grow">
+          <div class="label">Health</div>
+          <div class="bar-wrap">
+            <div id="hp-bar" class="bar hp"></div>
+          </div>
+          <div id="hp-text" class="value small mono">100</div>
+        </div>
+        <div class="panel">
+          <div class="label">Shield</div>
+          <div id="shield-text" class="value mono">—</div>
+        </div>
+        <div class="panel">
+          <div class="label">Boost</div>
+          <div id="boost-text" class="value mono">—</div>
+        </div>
+        <div class="panel wide">
+          <div class="label">Arsenal</div>
+          <div id="ammo-text" class="value small">
+            <span class="ammo cannon">●</span> <span id="ammo-cannon">0</span>
+            <span class="ammo missile">▲</span> <span id="ammo-missile">0</span>
+            <span class="ammo mine">◆</span> <span id="ammo-mine">0</span>
+          </div>
+        </div>
+      </div>
+      <div
+        id="pickup-toast"
+        class="pickup-toast hidden"
+        role="status"
+        aria-live="polite"
+      >
+        <div id="pickup-toast-title" class="pickup-toast-title"></div>
+        <div id="pickup-toast-desc" class="pickup-toast-desc"></div>
+      </div>
+      <div class="chat-panel panel">
+        <div class="label">Pit channel</div>
+        <div id="chat-log" class="chat-log" aria-live="polite"></div>
+      </div>
+      <div id="overlay" class="overlay hidden">
+        <div class="card">
+          <h2 id="overlay-title">Ready</h2>
+          <p id="overlay-sub"></p>
+          <p id="overlay-hint" class="hint hidden"></p>
+        </div>
+      </div>
+      <div id="countdown" class="countdown hidden"></div>
+      <div id="restart-prompt" class="restart-prompt hidden" role="status">
+        <span class="restart-prompt-inner"
+          >Restart? Press <kbd>Enter</kbd> to confirm ·
+          <kbd>Esc</kbd> or <kbd>Space</kbd> to cancel</span>
+      </div>
+      </div>
+    </div>
+    <script type="module" src="game.js"></script>
+  </body>
+</html>

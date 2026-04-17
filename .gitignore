@@ -1,0 +1,8 @@
+# Rust build output (any crate; covers accidental nested paths)
+**/target/
+
+# macOS
+.DS_Store
+
+# Windows
+Thumbs.db
