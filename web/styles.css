@@ -1282,6 +1282,21 @@ body {
   text-align: center;
 }
 
+.menu-options-enable-audio {
+  margin: 0 0 0.75rem;
+}
+
+/* No project-wide `.hidden` rule; clip to this block so the row actually disappears off-iOS. */
+.menu-options-enable-audio.hidden,
+#menu-options-enable-audio-wrap[hidden] {
+  display: none !important;
+}
+
+.menu-btn:disabled.menu-btn--audio-enabled {
+  opacity: 0.82;
+  cursor: default;
+}
+
 .menu-options-section-title {
   margin: 1.1rem 0 0.15rem;
   font-size: 0.68rem;
@@ -1328,13 +1343,6 @@ body {
   flex-shrink: 0;
   accent-color: var(--accent);
   cursor: pointer;
-}
-
-.menu-options-hint {
-  margin: 0.65rem 0 0;
-  font-size: 0.72rem;
-  line-height: 1.45;
-  color: var(--muted);
 }
 
 .menu-instructions-title {

@@ -128,6 +128,11 @@ export function getMusicVolume() {
   return musicVolume;
 }
 
+/** True when the Web Audio context exists and is running (sound is allowed to play). */
+export function isAudioContextRunning() {
+  return ctx != null && ctx.state === "running";
+}
+
 function sfxGain() {
   const g = ensureAudio().createGain();
   g.gain.value = 0.22;

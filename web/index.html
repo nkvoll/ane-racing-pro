@@ -190,9 +190,18 @@
               <input type="checkbox" id="opt-force-mobile" />
               <span>Force mobile mode (testing)</span>
             </label>
-            <p class="menu-options-hint">When off, drivethrough checkpoints are hidden; laps still use checkpoints.</p>
           </div>
           <h3 class="menu-options-section-title">Audio</h3>
+          <div
+            id="menu-options-enable-audio-wrap"
+            class="menu-options-enable-audio hidden"
+            hidden
+            aria-hidden="true"
+          >
+            <button type="button" class="menu-btn menu-btn-fullwidth" id="btn-options-enable-audio">
+              Enable sound
+            </button>
+          </div>
           <div class="menu-volume-block" aria-label="Volume">
             <div class="pause-volume">
               <label class="volume-label" for="sfx-volume">Sound effects</label>
