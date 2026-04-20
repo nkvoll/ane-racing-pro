@@ -1180,7 +1180,7 @@ function updateMines(dt) {
       if (car.wrecked) continue;
       if (car === m.owner && m.armed > 0) continue;
       if (hypot(car.x - m.x, car.y - m.y) < m.r + CAR_R) {
-        applyDamage(car, 24, { x: m.x, y: m.y });
+        applyDamage(car, car.maxHp * 0.75, { x: m.x, y: m.y });
         const oc = m.ownerColor || "#ffd54f";
         spawnParticles(m.x, m.y, 14, oc, 200);
         spawnParticles(m.x, m.y, 10, "#ff1744", 260);

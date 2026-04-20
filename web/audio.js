@@ -18,7 +18,6 @@ let musicVolume = 1;
 let musicPhase = 0;
 let musicAcc = 0;
 const MUSIC_STEP = 0.17;
-let hatAcc = 0;
 
 export function ensureAudio() {
   if (!ctx) {
@@ -95,20 +94,6 @@ function noiseBuffer(duration) {
   return buf;
 }
 
-/** Hann-windowed noise: starts and ends at 0 → no edge discontinuity when gain opens (hi-hat ticks). */
-function windowedNoiseBuffer(duration) {
-  const c = ensureAudio();
-  const len = Math.max(8, Math.floor(c.sampleRate * duration));
-  const buf = c.createBuffer(1, len, c.sampleRate);
-  const d = buf.getChannelData(0);
-  const last = len - 1;
-  for (let i = 0; i < len; i++) {
-    const win = 0.5 - 0.5 * Math.cos((2 * Math.PI * i) / last);
-    d[i] = (Math.random() * 2 - 1) * win;
-  }
-  return buf;
-}
-
 function connectMusicVoice(gainNode) {
   ensureAudio();
   gainNode.connect(musicHp);
@@ -144,20 +129,6 @@ function buildNoteGainCurve(vol, durSec) {
       env = 0;
     }
     curve[i] = vol * env;
-  }
-  return { curve, totalDur };
-}
-
-/** Sin² bump, zero at ends — smooth hi-hat amplitude. */
-function buildHatGainCurve(peak, totalDur) {
-  const c = ensureAudio();
-  const n = Math.min(96, Math.max(16, Math.ceil(totalDur * c.sampleRate * 0.6)));
-  const curve = new Float32Array(Math.max(2, n));
-  const denom = Math.max(1, curve.length - 1);
-  for (let i = 0; i < curve.length; i++) {
-    const u = i / denom;
-    const h = Math.sin(Math.PI * u);
-    curve[i] = peak * h * h;
   }
   return { curve, totalDur };
 }
@@ -308,35 +279,9 @@ function playMusicNote(freq, type, vol, dur, when) {
   o.stop(t + totalDur + 0.04);
 }
 
-function playHiHat(when) {
-  const c = ensureAudio();
-  const t = Math.max(when, c.currentTime + 0.025);
-  const buf = windowedNoiseBuffer(0.042);
-  const bufDur = buf.duration;
-  const src = c.createBufferSource();
-  const g = c.createGain();
-  const f = c.createBiquadFilter();
-  f.type = "bandpass";
-  f.frequency.value = 8800;
-  f.Q.value = 0.7;
-  src.buffer = buf;
-  src.connect(f);
-  f.connect(g);
-  const envDur = Math.min(bufDur * 0.94, 0.04);
-  const { curve, totalDur } = buildHatGainCurve(0.031, envDur);
-  g.gain.cancelScheduledValues(t);
-  g.gain.setValueAtTime(0, t);
-  g.gain.setValueCurveAtTime(curve, t, totalDur);
-  connectMusicVoice(g);
-  src.start(t);
-  src.stop(t + bufDur);
-}
-
 export function updateMusic(dt) {
   const c = ensureAudio();
   musicAcc += dt;
-  hatAcc += dt;
-  const hatStep = MUSIC_STEP * 0.5;
 
   let musicCatchUp = 0;
   while (musicAcc >= MUSIC_STEP) {
@@ -354,12 +299,5 @@ export function updateMusic(dt) {
       playMusicNote(midiToHz(LEAD_SEQ[(i + 4) % LEAD_SEQ.length]) * 0.5, "triangle", 0.05, 0.11, tb);
     }
     musicPhase++;
-  }
-
-  let hatCatchUp = 0;
-  while (hatAcc >= hatStep) {
-    hatAcc -= hatStep;
-    playHiHat(c.currentTime + hatCatchUp * hatStep);
-    hatCatchUp++;
   }
 }
