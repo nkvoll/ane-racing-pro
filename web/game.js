@@ -2236,7 +2236,21 @@ function checkCarLap(car, prev, curr) {
   const cps = track.checkpoints || [];
   if (cps.length > 0 && car.nextCheckpointIndex < cps.length) return;
 
-  if (cps.length > 0) car.nextCheckpointIndex = 0;
+  // New lap: reset CP counter, then credit any gates whose disks already contain the car
+  // (e.g. CP1 on/near S/F — no outside→inside edge needed on the frame you cross the line).
+  car.nextCheckpointIndex = 0;
+  if (cps.length > 0) {
+    const px = curr.x;
+    const py = curr.y;
+    while (car.nextCheckpointIndex < cps.length) {
+      const cp = cps[car.nextCheckpointIndex];
+      if (hypot(px - cp.x, py - cp.y) < cp.r) {
+        car.nextCheckpointIndex++;
+      } else {
+        break;
+      }
+    }
+  }
   car.raceLap += 1;
 
   if (!car.isPlayer) {
@@ -2283,6 +2297,38 @@ function checkCarLap(car, prev, curr) {
     try {
       audio.playLap();
     } catch (_) {}
+  }
+}
+
+/** Count checkpoints whose entry edge was crossed prev→curr; loop allows several in one frame. */
+function accumulateCheckpointsForCars(cars, cps) {
+  if (!cps || cps.length === 0) return;
+  for (const car of cars) {
+    if (car.wrecked) continue;
+    let guard = 0;
+    while (guard++ < cps.length + 2) {
+      const idx = car.nextCheckpointIndex;
+      if (idx >= cps.length) break;
+      const cp = cps[idx];
+      const ax = car.prevX;
+      const ay = car.prevY;
+      const bx = car.x;
+      const by = car.y;
+      const d = hypot(bx - cp.x, by - cp.y);
+      const dprev = hypot(ax - cp.x, ay - cp.y);
+      const moveLen = hypot(bx - ax, by - ay);
+      const entryFromOutside = d < cp.r && dprev >= cp.r;
+      const chordThroughDisk =
+        moveLen > 0.2 &&
+        dprev > cp.r &&
+        d > cp.r &&
+        circleHitsSegment(cp.x, cp.y, cp.r, ax, ay, bx, by);
+      if (entryFromOutside || chordThroughDisk) {
+        car.nextCheckpointIndex++;
+      } else {
+        break;
+      }
+    }
   }
 }
 
@@ -2731,12 +2777,28 @@ function drawWorld() {
 
   // Start / finish
   const fl = track.finishLine;
+  const cpsGate = track.checkpoints || [];
+  const needSfToCompleteLap =
+    state.mode === "race" &&
+    cpsGate.length > 0 &&
+    player.nextCheckpointIndex >= cpsGate.length;
+
   ctx.strokeStyle = "#fff59d";
   ctx.lineWidth = 5 / z;
   ctx.beginPath();
   ctx.moveTo(fl.a.x, fl.a.y);
   ctx.lineTo(fl.b.x, fl.b.y);
   ctx.stroke();
+  if (needSfToCompleteLap) {
+    ctx.strokeStyle = "rgba(255, 213, 79, 0.92)";
+    ctx.lineWidth = 8 / z;
+    ctx.setLineDash([12 / z, 8 / z]);
+    ctx.beginPath();
+    ctx.moveTo(fl.a.x, fl.a.y);
+    ctx.lineTo(fl.b.x, fl.b.y);
+    ctx.stroke();
+    ctx.setLineDash([]);
+  }
   ctx.fillStyle = "rgba(255,245,157,0.35)";
   ctx.font = `${14 / z}px Orbitron,sans-serif`;
   ctx.save();
@@ -2744,6 +2806,44 @@ function drawWorld() {
   ctx.rotate(Math.atan2(fl.tangent.y, fl.tangent.x));
   ctx.fillText("S/F", -12 / z, -8 / z);
   ctx.restore();
+
+  // Checkpoint drivethrough disks (must cross in order — skipping a disk means S/F won’t count a lap)
+  const cpsDraw = cpsGate;
+  if (cpsDraw.length > 0) {
+    const inRace = state.mode === "race";
+    const nextIdx = inRace ? player.nextCheckpointIndex : -1;
+    for (let i = 0; i < cpsDraw.length; i++) {
+      const cp = cpsDraw[i];
+      const passed = inRace && i < nextIdx;
+      const isNext = inRace && i === nextIdx;
+      ctx.beginPath();
+      ctx.arc(cp.x, cp.y, cp.r, 0, TAU);
+      if (passed) {
+        ctx.strokeStyle = "rgba(129, 199, 132, 0.88)";
+        ctx.fillStyle = "rgba(129, 199, 132, 0.1)";
+      } else if (isNext) {
+        ctx.strokeStyle = "rgba(77, 208, 225, 0.95)";
+        ctx.fillStyle = "rgba(77, 208, 225, 0.16)";
+      } else {
+        ctx.strokeStyle = "rgba(255, 255, 255, 0.42)";
+        ctx.fillStyle = "rgba(255, 255, 255, 0.05)";
+      }
+      ctx.lineWidth = (isNext ? 3.5 : 2.2) / z;
+      ctx.fill();
+      ctx.stroke();
+      ctx.save();
+      ctx.fillStyle = isNext
+        ? "rgba(200, 245, 255, 0.95)"
+        : passed
+          ? "rgba(200, 230, 200, 0.75)"
+          : "rgba(255, 255, 255, 0.5)";
+      ctx.font = `${13 / z}px Orbitron,sans-serif`;
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText(String(i + 1), cp.x, cp.y);
+      ctx.restore();
+    }
+  }
 
   const pulse = performance.now() * 0.004;
   for (const pk of pickups) {
@@ -3047,22 +3147,15 @@ function frame(now) {
     }
 
     const cps = track.checkpoints || [];
-    for (const car of cars) {
-      if (car.wrecked) continue;
-      const idx = car.nextCheckpointIndex;
-      if (idx >= cps.length) continue;
-      const cp = cps[idx];
-      const d = hypot(car.x - cp.x, car.y - cp.y);
-      const dprev = hypot(car.prevX - cp.x, car.prevY - cp.y);
-      if (d < cp.r && dprev >= cp.r) {
-        car.nextCheckpointIndex++;
-      }
-    }
+    accumulateCheckpointsForCars(cars, cps);
 
     for (let i = 0; i < cars.length; i++) {
       const c = cars[i];
       checkCarLap(c, { x: c.prevX, y: c.prevY }, { x: c.x, y: c.y });
     }
+
+    // After S/F may reset index K→0 in the same frame; run CP logic again so lap 2+ can start at CP1 immediately.
+    accumulateCheckpointsForCars(cars, cps);
     for (const car of cars) {
       car.prevX = car.x;
       car.prevY = car.y;
