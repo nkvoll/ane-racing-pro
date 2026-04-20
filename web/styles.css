@@ -14,6 +14,10 @@
   box-sizing: border-box;
 }
 
+html {
+  color-scheme: dark;
+}
+
 html,
 body {
   margin: 0;
@@ -27,13 +31,25 @@ body {
 #viewport {
   position: fixed;
   inset: 0;
+  z-index: 0;
   background: radial-gradient(ellipse 120% 80% at 50% 0%, #152238 0%, var(--bg) 55%);
   display: flex;
   align-items: center;
   justify-content: center;
 }
 
+/* Wraps canvas; pause menu is a separate body-level fixed layer. */
+.game-stage {
+  position: relative;
+  z-index: 0;
+  display: block;
+  line-height: 0;
+  flex-shrink: 0;
+}
+
 #game {
+  position: relative;
+  z-index: 0;
   display: block;
   width: min(100vw, calc(100vh * 1280 / 720));
   height: min(100vh, calc(100vw * 720 / 1280));
@@ -43,6 +59,48 @@ body {
   box-shadow:
     0 0 0 1px rgba(0, 0, 0, 0.5),
     0 0 60px rgba(0, 229, 255, 0.06);
+}
+
+/*
+ * Pause is a direct child of <body> (after #viewport). Fixed full viewport + extreme z-index so
+ * the WebView always paints it above the game canvas (GPU layer under in-tree overlays is unreliable).
+ */
+/* JS may mirror these with setProperty(..., 'important') for stubborn WebViews. */
+#pause-overlay.pause-overlay-root {
+  position: fixed !important;
+  left: 0 !important;
+  top: 0 !important;
+  right: 0 !important;
+  bottom: 0 !important;
+  width: 100vw !important;
+  height: 100vh !important;
+  max-width: 100vw !important;
+  max-height: 100vh !important;
+  margin: 0 !important;
+  padding: 1rem;
+  box-sizing: border-box;
+  z-index: 2147483647;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(5, 8, 14, 0.94);
+  pointer-events: auto;
+  -webkit-transform: translateZ(0);
+  transform: translateZ(0);
+}
+
+#pause-overlay.pause-overlay-root.hidden {
+  display: none !important;
+  pointer-events: none !important;
+}
+
+#viewport.race-paused .ui-header,
+#viewport.race-paused .hud,
+#viewport.race-paused .hud-combat,
+#viewport.race-paused .pickup-legend,
+#viewport.race-paused .chat-panel {
+  opacity: 0.4;
+  transition: opacity 0.15s ease;
 }
 
 .ui-overlay {
@@ -550,6 +608,90 @@ body {
 
 .overlay.hidden {
   display: none;
+}
+
+.pause-card {
+  max-width: 380px;
+  text-align: left;
+  position: relative;
+  z-index: 1;
+  isolation: isolate;
+  transform: translateZ(0);
+}
+
+.pause-card h2 {
+  text-align: center;
+}
+
+.pause-volume {
+  margin: 1rem 0 0;
+}
+
+.pause-volume:first-of-type {
+  margin-top: 0.75rem;
+}
+
+.volume-label {
+  display: block;
+  font-size: 0.78rem;
+  color: var(--muted);
+  margin-bottom: 0.35rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+/* WebKit/Chromium: style range track/thumb so sliders stay visible. */
+#pause-overlay.pause-overlay-root input[type="range"] {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  min-height: 2rem;
+  margin: 0.2rem 0 0;
+  background: transparent;
+  cursor: pointer;
+  accent-color: var(--accent);
+}
+
+#pause-overlay.pause-overlay-root input[type="range"]::-webkit-slider-runnable-track {
+  width: 100%;
+  height: 10px;
+  background: rgba(0, 229, 255, 0.22);
+  border-radius: 5px;
+  border: 1px solid rgba(0, 229, 255, 0.28);
+}
+
+#pause-overlay.pause-overlay-root input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 20px;
+  height: 20px;
+  margin-top: -6px;
+  border-radius: 50%;
+  background: linear-gradient(145deg, #5af3ff, var(--accent));
+  border: 2px solid rgba(255, 255, 255, 0.35);
+  box-shadow: 0 2px 10px rgba(0, 229, 255, 0.45);
+}
+
+#pause-overlay.pause-overlay-root input[type="range"]::-moz-range-track {
+  width: 100%;
+  height: 10px;
+  background: rgba(0, 229, 255, 0.22);
+  border-radius: 5px;
+  border: 1px solid rgba(0, 229, 255, 0.28);
+}
+
+#pause-overlay.pause-overlay-root input[type="range"]::-moz-range-thumb {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  border: 2px solid rgba(255, 255, 255, 0.35);
+  background: linear-gradient(145deg, #5af3ff, var(--accent));
+  box-shadow: 0 2px 10px rgba(0, 229, 255, 0.45);
+}
+
+#pause-hint {
+  margin-top: 1.25rem !important;
+  text-align: center;
 }
 
 .card {

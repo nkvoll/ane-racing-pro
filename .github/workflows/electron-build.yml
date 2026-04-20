@@ -1,0 +1,46 @@
+# Cross-platform Electron releases (electron-builder)
+name: Electron build
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-22.04
+            label: linux-x64
+          - os: macos-latest
+            label: macos
+          - os: windows-latest
+            label: windows-x64
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Linux — packages for electron-builder (AppImage / .deb)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends libfuse2
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Build dist
+        run: npm run dist
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ane-racing-pro-${{ matrix.label }}
+          path: dist/
+          if-no-files-found: error

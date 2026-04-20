@@ -1,0 +1,57 @@
+{
+  "name": "ane-racing-pro",
+  "version": "0.1.0",
+  "description": "Ane Racing PRO — desktop arcade racer",
+  "main": "electron/main.cjs",
+  "private": true,
+  "author": "Ane Racing contributors",
+  "license": "MIT",
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "start": "electron .",
+    "dist": "electron-builder",
+    "dist:dir": "electron-builder --dir"
+  },
+  "devDependencies": {
+    "electron": "^33.2.1",
+    "electron-builder": "^25.1.8"
+  },
+  "build": {
+    "publish": null,
+    "appId": "dev.nkvoll.ane-racing-pro",
+    "productName": "Ane Racing PRO",
+    "files": [
+      "electron/main.cjs",
+      "web/**/*",
+      "package.json"
+    ],
+    "directories": {
+      "output": "dist"
+    },
+    "mac": {
+      "category": "public.app-category.games",
+      "target": [
+        "dmg",
+        "zip"
+      ]
+    },
+    "win": {
+      "target": [
+        "nsis",
+        "zip"
+      ]
+    },
+    "linux": {
+      "target": [
+        "AppImage",
+        "deb"
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true
+    }
+  }
+}

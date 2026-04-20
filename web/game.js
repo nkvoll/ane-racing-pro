@@ -1152,6 +1152,7 @@ const state = {
   prevPos: { x: player.x, y: player.y },
   camera: { x: 0, y: 0, zoom: 1 },
   pendingRestart: false,
+  paused: false,
 };
 
 const overlay = document.getElementById("overlay");
@@ -1176,6 +1177,83 @@ const chatLogEl = document.getElementById("chat-log");
 const pickupToastEl = document.getElementById("pickup-toast");
 const pickupToastTitleEl = document.getElementById("pickup-toast-title");
 const pickupToastDescEl = document.getElementById("pickup-toast-desc");
+const viewportEl = document.getElementById("viewport");
+const pauseOverlayEl = document.getElementById("pause-overlay");
+const sfxVolumeEl = document.getElementById("sfx-volume");
+const musicVolumeEl = document.getElementById("music-volume");
+
+/**
+ * Some embedded WebViews ignore stacking for GPU-backed <canvas>; inline
+ * setProperty(..., 'important') keeps the pause layer above the game when needed.
+ */
+function applyPauseOverlayForWebView(el) {
+  if (!el) return;
+  if (el.parentElement !== document.body) {
+    document.body.appendChild(el);
+  }
+  el.classList.remove("hidden");
+  el.setAttribute("aria-hidden", "false");
+  const I = "important";
+  el.style.setProperty("position", "fixed", I);
+  el.style.setProperty("top", "0", I);
+  el.style.setProperty("left", "0", I);
+  el.style.setProperty("right", "0", I);
+  el.style.setProperty("bottom", "0", I);
+  el.style.setProperty("width", "100vw", I);
+  el.style.setProperty("height", "100vh", I);
+  el.style.setProperty("max-width", "100vw", I);
+  el.style.setProperty("max-height", "100vh", I);
+  el.style.setProperty("margin", "0", I);
+  el.style.setProperty("padding", "1rem", I);
+  el.style.setProperty("box-sizing", "border-box", I);
+  el.style.setProperty("z-index", "2147483647", I);
+  el.style.setProperty("display", "flex", I);
+  el.style.setProperty("align-items", "center", I);
+  el.style.setProperty("justify-content", "center", I);
+  el.style.setProperty("visibility", "visible", I);
+  el.style.setProperty("opacity", "1", I);
+  el.style.setProperty("pointer-events", "auto", I);
+  el.style.setProperty("background-color", "rgba(5, 8, 14, 0.94)", I);
+  el.style.setProperty("-webkit-transform", "translateZ(0)", I);
+  el.style.setProperty("transform", "translateZ(0)", I);
+}
+
+function hidePauseOverlayForWebView(el) {
+  if (!el) return;
+  el.classList.add("hidden");
+  el.setAttribute("aria-hidden", "true");
+  el.removeAttribute("style");
+}
+
+function syncPauseSliderElements() {
+  if (sfxVolumeEl) sfxVolumeEl.value = String(Math.round(audio.getSfxVolume() * 100));
+  if (musicVolumeEl) musicVolumeEl.value = String(Math.round(audio.getMusicVolume() * 100));
+}
+
+function openPause() {
+  if (state.mode !== "race" || state.pendingRestart) return;
+  state.paused = true;
+  keys.up = keys.down = keys.left = keys.right = keys.handbrake = false;
+  viewportEl?.classList.add("race-paused");
+  if (pauseOverlayEl) {
+    applyPauseOverlayForWebView(pauseOverlayEl);
+    syncPauseSliderElements();
+    /* Layout pass: WKWebView sometimes skips painting range controls until after reflow. */
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        syncPauseSliderElements();
+        if (pauseOverlayEl) void pauseOverlayEl.offsetHeight;
+      });
+    });
+  }
+}
+
+function resumeFromPause() {
+  if (!state.paused) return;
+  state.paused = false;
+  viewportEl?.classList.remove("race-paused");
+  if (pauseOverlayEl) hidePauseOverlayForWebView(pauseOverlayEl);
+}
 
 function showOverlay(title, sub, show = true, hint = "") {
   overlayTitle.textContent = title;
@@ -1426,6 +1504,7 @@ window.addEventListener("keydown", (e) => {
   if (e.code === "ShiftLeft" || e.code === "ShiftRight") keys.handbrake = true;
 
   if (e.code === "KeyR" && (state.mode === "race" || state.mode === "finished")) {
+    if (state.paused) return;
     if (!state.pendingRestart) {
       setRestartPrompt(true);
     }
@@ -1438,14 +1517,40 @@ window.addEventListener("keydown", (e) => {
     return;
   }
 
-  if (e.code === "Escape" && state.pendingRestart) {
-    e.preventDefault();
-    setRestartPrompt(false);
-    return;
+  if (e.code === "Escape") {
+    if (state.pendingRestart) {
+      e.preventDefault();
+      setRestartPrompt(false);
+      return;
+    }
+    if (state.paused) {
+      e.preventDefault();
+      resumeFromPause();
+      return;
+    }
+    if (state.mode === "race") {
+      e.preventDefault();
+      openPause();
+      return;
+    }
+  }
+
+  if (e.code === "KeyP" && !e.repeat) {
+    if (state.pendingRestart) return;
+    if (state.mode === "race") {
+      e.preventDefault();
+      if (state.paused) resumeFromPause();
+      else openPause();
+      return;
+    }
   }
 
   if (e.code === "Space") {
     e.preventDefault();
+    if (state.paused) {
+      resumeFromPause();
+      return;
+    }
     if (state.pendingRestart) {
       setRestartPrompt(false);
       return;
@@ -1454,6 +1559,7 @@ window.addEventListener("keydown", (e) => {
   }
   if (
     state.mode === "race" &&
+    !state.paused &&
     !e.repeat &&
     !player.wrecked
   ) {
@@ -1508,9 +1614,12 @@ function resetRace() {
   state.lapStartTime = performance.now() / 1000;
   state.raceStartTime = state.lapStartTime;
   state.mode = "race";
+  state.paused = false;
   showOverlay("", "", false, "");
   countdownEl.classList.add("hidden");
   setRestartPrompt(false);
+  viewportEl?.classList.remove("race-paused");
+  if (pauseOverlayEl) hidePauseOverlayForWebView(pauseOverlayEl);
   state.prevPos.x = player.x;
   state.prevPos.y = player.y;
   chatLines.length = 0;
@@ -1523,6 +1632,9 @@ function resetRace() {
 function startSequence() {
   showOverlay("", "", false, "");
   setRestartPrompt(false);
+  state.paused = false;
+  viewportEl?.classList.remove("race-paused");
+  if (pauseOverlayEl) hidePauseOverlayForWebView(pauseOverlayEl);
   state.mode = "countdown";
   countdownEl.classList.remove("hidden");
   const labels = ["3", "2", "1", "GO"];
@@ -1541,6 +1653,47 @@ function startSequence() {
     }
   }, 820);
 }
+
+if (sfxVolumeEl) {
+  sfxVolumeEl.addEventListener("input", () => {
+    try {
+      audio.ensureAudio();
+    } catch (_) {}
+    const v = Number(sfxVolumeEl.value) / 100;
+    audio.setSfxVolume(v);
+    localStorage.setItem("aneRacingSfxVol", String(v));
+  });
+}
+if (musicVolumeEl) {
+  musicVolumeEl.addEventListener("input", () => {
+    try {
+      audio.ensureAudio();
+    } catch (_) {}
+    const v = Number(musicVolumeEl.value) / 100;
+    audio.setMusicVolume(v);
+    localStorage.setItem("aneRacingMusicVol", String(v));
+  });
+}
+if (pauseOverlayEl) {
+  pauseOverlayEl.addEventListener("click", (e) => {
+    if (e.target === pauseOverlayEl) resumeFromPause();
+  });
+}
+
+try {
+  audio.ensureAudio();
+  const ss = localStorage.getItem("aneRacingSfxVol");
+  const sm = localStorage.getItem("aneRacingMusicVol");
+  if (ss != null) {
+    const v = parseFloat(ss);
+    if (!Number.isNaN(v)) audio.setSfxVolume(v);
+  }
+  if (sm != null) {
+    const v = parseFloat(sm);
+    if (!Number.isNaN(v)) audio.setMusicVolume(v);
+  }
+  syncPauseSliderElements();
+} catch (_) {}
 
 initPickups();
 showOverlay(
@@ -1887,7 +2040,7 @@ function frame(now) {
   const dt = clamp((now - lastFrame) / 1000, 0, 0.05);
   lastFrame = now;
 
-  if (state.mode === "race") {
+  if (state.mode === "race" && !state.paused) {
     const nowSec = now / 1000;
 
     for (const car of cars) {
@@ -1933,6 +2086,8 @@ function frame(now) {
     try {
       audio.updateMusic(dt);
     } catch (_) {}
+  } else if (state.mode === "race" && state.paused) {
+    updateHud();
   } else {
     for (const car of cars) {
       updateCar(car, dt, keys);
@@ -1949,6 +2104,14 @@ function frame(now) {
   ctx.fillStyle = "#0d1018";
   ctx.fillRect(0, 0, canvas.width, canvas.height);
   drawWorld();
+  /* Subtle dim on the framebuffer if the DOM pause layer is occluded (extra feedback in some WebViews). */
+  if (state.mode === "race" && state.paused) {
+    ctx.save();
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.fillStyle = "rgba(5, 8, 14, 0.22)";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.restore();
+  }
 
   requestAnimationFrame(frame);
 }

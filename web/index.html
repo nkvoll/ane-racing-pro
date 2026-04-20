@@ -8,7 +8,10 @@
   </head>
   <body>
     <div id="viewport">
-      <canvas id="game" width="1280" height="720"></canvas>
+      <!-- Canvas lives in game-stage; pause menu is a body-level fixed layer (see #pause-overlay). -->
+      <div id="game-stage" class="game-stage">
+        <canvas id="game" width="1280" height="720"></canvas>
+      </div>
       <div id="ui" class="ui-overlay">
       <header class="ui-header">
         <h1 class="brand-title">
@@ -17,7 +20,9 @@
         </h1>
         <p class="tagline">
           WASD · <strong>Shift</strong> handbrake · <strong>F</strong> / <strong>E</strong> /
-          <strong>C</strong> weapons · <strong>R</strong> + <strong>Enter</strong> restart
+          <strong>C</strong> weapons · <strong>Esc</strong> / <strong>P</strong> pause ·
+          <strong>R</strong> +
+          <strong>Enter</strong> restart
         </p>
       </header>
       <aside class="pickup-legend panel" aria-label="Pickup guide">
@@ -146,6 +151,43 @@
           >Restart? Press <kbd>Enter</kbd> to confirm ·
           <kbd>Esc</kbd> or <kbd>Space</kbd> to cancel</span>
       </div>
+      </div>
+    </div>
+    <!-- Full-screen fixed layer on <body> (above #viewport / canvas) -->
+    <div
+      id="pause-overlay"
+      class="pause-overlay pause-overlay-root hidden"
+      aria-hidden="true"
+    >
+      <div class="card pause-card">
+        <h2 id="pause-title">Paused</h2>
+        <div class="pause-volume">
+          <label class="volume-label" for="sfx-volume">Sound effects</label>
+          <input
+            id="sfx-volume"
+            type="range"
+            min="0"
+            max="100"
+            value="100"
+            aria-valuemin="0"
+            aria-valuemax="100"
+          />
+        </div>
+        <div class="pause-volume">
+          <label class="volume-label" for="music-volume">Music</label>
+          <input
+            id="music-volume"
+            type="range"
+            min="0"
+            max="100"
+            value="100"
+            aria-valuemin="0"
+            aria-valuemax="100"
+          />
+        </div>
+        <p id="pause-hint" class="hint">
+          <kbd>Esc</kbd>, <kbd>P</kbd>, or <kbd>Space</kbd> to resume
+        </p>
       </div>
     </div>
     <script type="module" src="game.js"></script>

@@ -1,4 +1,8 @@
-# Rust build output (any crate; covers accidental nested paths)
+# Node / Electron
+node_modules/
+dist/
+
+# Rust (legacy / subprojects)
 **/target/
 
 # macOS

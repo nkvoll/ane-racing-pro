@@ -1,77 +1,63 @@
 # Ane Racing PRO
 
-Desktop shell for the game UI, built with [Tauri](https://tauri.app/) 2. The frontend is static files under `web/`; release builds copy that folder into the app (no separate bundler step).
+Desktop shell for the arcade racer using **Electron**. The game is static files under `web/` (ES modules, no frontend bundler). Electron loads `web/index.html` directly.
 
 ## Prerequisites
 
-- [Rust](https://rustup.rs/) (stable), with the usual target for your OS (e.g. `x86_64-pc-windows-msvc` on Windows for the CI-style build).
-- **Python 3** for local development only: `beforeDevCommand` serves `web/` with `python3 -m http.server` on port **1420**.
-- **Tauri CLI** (if you do not have it yet):
+- **[Node.js](https://nodejs.org/)** 18+ (includes `npm`)
 
-  ```bash
-  cargo install tauri-cli --version 2.10.1 --locked
-  ```
-
-## Development
-
-From the **repository root** (same directory as this file):
-
-```bash
-cargo tauri dev
-```
-
-This starts the static file server and opens the app window pointed at `http://127.0.0.1:1420`.
-
-## Release build
+## Install
 
 From the repository root:
 
 ```bash
-cargo tauri build
+npm install
 ```
 
-Artifacts depend on the platform (e.g. `.app` / `.dmg` on macOS via `tauri.macos.conf.json`, plain `.exe` on Windows when bundling is disabled). On GitHub Actions, the [tauri-build](.github/workflows/tauri-build.yml) workflow uses a matrix (Linux, macOS, Windows) and [tauri-action](https://github.com/tauri-apps/tauri-action): Windows and Linux upload the release binary; macOS uploads the `bundle/` output (`.app` / `.dmg`).
+That installs Electron and electron-builder and writes `package-lock.json`. Commit the lockfile so CI and teammates get the same versions.
 
-### Release builds for Apple Silicon, Linux x64, and Windows x64
-
-Tauri uses Rust [target triples](https://doc.rust-lang.org/rustc/platform-support.html). For these desktop targets the usual triples are:
-
-| Platform | Target triple |
-| -------- | ------------- |
-| macOS (Apple Silicon) | `aarch64-apple-darwin` |
-| Linux (x86_64, typical glibc) | `x86_64-unknown-linux-gnu` |
-| Windows (x86_64) | `x86_64-pc-windows-msvc` |
-
-Install only the targets you need:
+## Run (development)
 
 ```bash
-rustup target add aarch64-apple-darwin
-rustup target add x86_64-unknown-linux-gnu
-rustup target add x86_64-pc-windows-msvc
+npm start
 ```
 
-From the **repository root**, build for one triple:
+This launches the Electron window with the game. Optional: open DevTools by setting an environment variable before starting:
 
 ```bash
-cargo tauri build --target aarch64-apple-darwin
-cargo tauri build --target x86_64-unknown-linux-gnu
-cargo tauri build --target x86_64-pc-windows-msvc
+ELECTRON_OPEN_DEVTOOLS=1 npm start
 ```
 
-On an Apple Silicon Mac, a plain `cargo tauri build` already targets `aarch64-apple-darwin`. To produce an Intel (x86_64) macOS build from Apple Silicon, add the `x86_64-apple-darwin` target and pass `--target x86_64-apple-darwin`.
+## Production build (installers / artifacts)
 
-**Host vs cross-compile:** Tauri depends on each platform’s WebView and system libraries. The most reliable approach is to run `cargo tauri build --target …` **on a machine that matches that OS** (or use CI, as in [tauri-build](.github/workflows/tauri-build.yml)). Cross-compiling from one OS to another (for example Windows from macOS or Linux) needs extra C toolchains, linkers, and setup. Install the usual tools per OS first ([Tauri prerequisites](https://v2.tauri.app/start/prerequisites/): WebKitGTK on Linux, MSVC/WebView2 on Windows, Xcode or command-line tools on macOS), then see [Distribute](https://v2.tauri.app/distribute/) for bundling and signing.
+Uses [electron-builder](https://www.electron.build/) (configured in `package.json` under `"build"`).
 
-#### Example building from Mac to Windows x64 with cargo-xwin and lld/llvm
-
-Building for Windows, this seemed to do the trick:
-
+```bash
+npm run dist
 ```
-rustup target add x86_64-pc-windows-msvc
-cargo install cargo-xwin
-brew install lld llvm
-export PATH="$HOME/.cargo/bin:/opt/homebrew/opt/llvm/bin:$PATH"
-CARGO_TARGET_DIR=src-tauri/target cargo tauri build \
-  --target x86_64-pc-windows-msvc \
-  --runner cargo-xwin
+
+Output goes to `dist/` (`.dmg` / `.zip` on macOS, `nsis` / `.exe` / `.zip` on Windows, `AppImage` / `.deb` on Linux).
+
+Quick unpacked test (faster, no installer):
+
+```bash
+npm run dist:dir
 ```
+
+Build the way you ship: run `npm run dist` **on the target OS** (or use CI). Cross-compiling Electron native modules from one OS to another is not the default workflow; use a matrix on GitHub Actions if you need all three platforms.
+
+## Project layout
+
+| Path | Purpose |
+|------|---------|
+| `web/` | Game: `index.html`, `game.js`, `styles.css`, `audio.js` |
+| `electron/main.cjs` | Electron main process — window + `loadFile` → `web/index.html` |
+| `package.json` | npm scripts, electron / electron-builder devDependencies |
+
+## Web / browser
+
+You can still open the game in a normal browser by serving `web/` (e.g. `npx serve web` or any static server) and visiting the served URL.
+
+## CI
+
+See [.github/workflows/electron-build.yml](.github/workflows/electron-build.yml) for a cross-platform `npm run dist` workflow (optional manual trigger).

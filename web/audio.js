@@ -4,7 +4,13 @@
 
 let ctx = null;
 let masterGain = null;
+/** All SFX route through this so volume slider affects sound effects only. */
+let sfxBus = null;
 let musicGain = null;
+/* Scaled by music slider 0–1; was ~0.12 (too quiet vs SFX). */
+const BASE_MUSIC_GAIN = 0.4;
+let sfxVolume = 1;
+let musicVolume = 1;
 let musicPhase = 0;
 let musicAcc = 0;
 const MUSIC_STEP = 0.17;
@@ -17,8 +23,11 @@ export function ensureAudio() {
     masterGain = ctx.createGain();
     masterGain.gain.value = 0.55;
     masterGain.connect(ctx.destination);
+    sfxBus = ctx.createGain();
+    sfxBus.gain.value = sfxVolume;
+    sfxBus.connect(masterGain);
     musicGain = ctx.createGain();
-    musicGain.gain.value = 0.12;
+    musicGain.gain.value = musicVolume * BASE_MUSIC_GAIN;
     musicGain.connect(masterGain);
   }
   if (ctx.state === "suspended") {
@@ -27,10 +36,30 @@ export function ensureAudio() {
   return ctx;
 }
 
+/** Linear 0–1; persisted by the game (localStorage). */
+export function setSfxVolume(v) {
+  sfxVolume = Math.max(0, Math.min(1, v));
+  if (sfxBus) sfxBus.gain.value = sfxVolume;
+}
+
+/** Linear 0–1; persisted by the game (localStorage). */
+export function setMusicVolume(v) {
+  musicVolume = Math.max(0, Math.min(1, v));
+  if (musicGain) musicGain.gain.value = musicVolume * BASE_MUSIC_GAIN;
+}
+
+export function getSfxVolume() {
+  return sfxVolume;
+}
+
+export function getMusicVolume() {
+  return musicVolume;
+}
+
 function sfxGain() {
   const g = ensureAudio().createGain();
   g.gain.value = 0.22;
-  g.connect(masterGain);
+  g.connect(sfxBus);
   return g;
 }
 
