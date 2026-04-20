@@ -86,11 +86,6 @@ function findLongestEdgeStartIndex(center) {
   return bestI;
 }
 
-/** 2D cross of (b-a) with (p-a) — sign tells which side of line AB point P is on. */
-function crossLinePoint(ax, ay, bx, by, px, py) {
-  return (bx - ax) * (py - ay) - (by - ay) * (px - ax);
-}
-
 function segmentIntersect(p1, p2, p3, p4) {
   const d = (p1.x - p2.x) * (p3.y - p4.y) - (p1.y - p2.y) * (p3.x - p4.x);
   if (Math.abs(d) < 1e-9) return null;
@@ -1371,12 +1366,8 @@ function updateCar(car, dt, input) {
 
 function checkCarLap(car, prev, curr) {
   const fl = track.finishLine;
-  const cp = crossLinePoint(fl.a.x, fl.a.y, fl.b.x, fl.b.y, prev.x, prev.y);
-  const cc = crossLinePoint(fl.a.x, fl.a.y, fl.b.x, fl.b.y, curr.x, curr.y);
-  const eps = 2;
-  const crossedSides = cp * cc < 0 || (Math.abs(cp) <= eps && Math.abs(cc) > eps) || (Math.abs(cc) <= eps && Math.abs(cp) > eps);
-  const hitSeg = segmentIntersect(prev, curr, fl.a, fl.b) != null;
-  if (!crossedSides && !hitSeg) return;
+  // Only the finite S/F segment counts — not the infinite line through it (else false laps elsewhere).
+  if (segmentIntersect(prev, curr, fl.a, fl.b) == null) return;
 
   const vx = curr.x - prev.x;
   const vy = curr.y - prev.y;
