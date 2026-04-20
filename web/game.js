@@ -1265,7 +1265,7 @@ let preRaceCountdownIntervalId = null;
 let preRaceCountdownTimeoutId = null;
 let resumeCountdownIntervalId = null;
 let resumeCountdownTimeoutId = null;
-/** "main" | "audio" | "controls" — nested menu screens */
+/** "main" | "audio" | "instructions" — nested menu screens */
 let menuSubScreen = "main";
 
 const overlay = document.getElementById("overlay");
@@ -1357,21 +1357,21 @@ function updateGameMenuPanels() {
   const titlePanel = document.getElementById("menu-panel-title");
   const pausePanel = document.getElementById("menu-panel-pause");
   const audioPanel = document.getElementById("menu-panel-audio");
-  const controlsPanel = document.getElementById("menu-panel-controls");
-  if (!titlePanel || !pausePanel || !audioPanel || !controlsPanel) return;
+  const instructionsPanel = document.getElementById("menu-panel-instructions");
+  if (!titlePanel || !pausePanel || !audioPanel || !instructionsPanel) return;
   const showTitle =
     state.mode === "title" && state.menuContext === "title" && state.menuOpen;
 
   if (menuSubScreen === "audio") {
     audioPanel.classList.remove("hidden");
-    controlsPanel.classList.add("hidden");
+    instructionsPanel.classList.add("hidden");
     titlePanel.classList.add("hidden");
     pausePanel.classList.add("hidden");
     return;
   }
 
-  if (menuSubScreen === "controls") {
-    controlsPanel.classList.remove("hidden");
+  if (menuSubScreen === "instructions") {
+    instructionsPanel.classList.remove("hidden");
     audioPanel.classList.add("hidden");
     titlePanel.classList.add("hidden");
     pausePanel.classList.add("hidden");
@@ -1379,7 +1379,7 @@ function updateGameMenuPanels() {
   }
 
   audioPanel.classList.add("hidden");
-  controlsPanel.classList.add("hidden");
+  instructionsPanel.classList.add("hidden");
   titlePanel.classList.toggle("hidden", !showTitle);
   pausePanel.classList.toggle("hidden", showTitle);
 }
@@ -1395,8 +1395,8 @@ function showAudioSubmenu() {
   updateGameMenuPanels();
 }
 
-function showControlsSubmenu() {
-  menuSubScreen = "controls";
+function showInstructionsSubmenu() {
+  menuSubScreen = "instructions";
   updateGameMenuPanels();
 }
 
@@ -1823,7 +1823,7 @@ window.addEventListener("keydown", (e) => {
   if (e.code === "ShiftLeft" || e.code === "ShiftRight") keys.handbrake = true;
 
   if (e.code === "Escape") {
-    if (state.menuOpen && (menuSubScreen === "audio" || menuSubScreen === "controls")) {
+    if (state.menuOpen && (menuSubScreen === "audio" || menuSubScreen === "instructions")) {
       e.preventDefault();
       exitMenuSubscreen();
       return;
@@ -1845,7 +1845,7 @@ window.addEventListener("keydown", (e) => {
   }
 
   if (e.code === "KeyP" && !e.repeat) {
-    if (state.menuOpen && (menuSubScreen === "audio" || menuSubScreen === "controls")) {
+    if (state.menuOpen && (menuSubScreen === "audio" || menuSubScreen === "instructions")) {
       e.preventDefault();
       exitMenuSubscreen();
       return;
@@ -1861,7 +1861,7 @@ window.addEventListener("keydown", (e) => {
   if (e.code === "Space") {
     e.preventDefault();
     if (state.menuOpen) {
-      if (menuSubScreen === "audio" || menuSubScreen === "controls") {
+      if (menuSubScreen === "audio" || menuSubScreen === "instructions") {
         exitMenuSubscreen();
         return;
       }
@@ -2012,7 +2012,7 @@ if (musicVolumeEl) {
 if (gameMenuOverlayEl) {
   gameMenuOverlayEl.addEventListener("click", (e) => {
     if (e.target !== gameMenuOverlayEl) return;
-    if (menuSubScreen === "audio" || menuSubScreen === "controls") {
+    if (menuSubScreen === "audio" || menuSubScreen === "instructions") {
       exitMenuSubscreen();
       return;
     }
@@ -2024,12 +2024,12 @@ if (gameMenuOverlayEl) {
 document.getElementById("btn-new-game")?.addEventListener("click", () => {
   if (state.mode === "title") startSequence();
 });
-document.getElementById("btn-title-controls")?.addEventListener("click", () => showControlsSubmenu());
-document.getElementById("btn-pause-controls")?.addEventListener("click", () => showControlsSubmenu());
+document.getElementById("btn-title-instructions")?.addEventListener("click", () => showInstructionsSubmenu());
+document.getElementById("btn-pause-instructions")?.addEventListener("click", () => showInstructionsSubmenu());
 document.getElementById("btn-title-audio")?.addEventListener("click", () => showAudioSubmenu());
 document.getElementById("btn-pause-audio")?.addEventListener("click", () => showAudioSubmenu());
 document.getElementById("btn-audio-back")?.addEventListener("click", () => exitMenuSubscreen());
-document.getElementById("btn-controls-back")?.addEventListener("click", () => exitMenuSubscreen());
+document.getElementById("btn-instructions-back")?.addEventListener("click", () => exitMenuSubscreen());
 document
   .getElementById("btn-title-fullscreen")
   ?.addEventListener("click", () => toggleFullscreenGame());

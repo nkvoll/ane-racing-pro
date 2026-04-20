@@ -45,59 +45,6 @@
         </div>
       </div>
       </div>
-      <aside class="pickup-legend panel" aria-label="Pickup guide">
-        <div class="label">Track pickups</div>
-        <ul class="pickup-legend-list">
-          <li>
-            <span class="lg h">H</span>
-            <span><strong>Repair</strong> +38 HP (cap at max)</span>
-          </li>
-          <li>
-            <span class="lg h2">!</span>
-            <span><strong>Full repair</strong> to 100% HP</span>
-          </li>
-          <li>
-            <span class="lg p">P</span>
-            <span><strong>Plasma</strong> ammo — <kbd>F</kbd> forward shots</span>
-          </li>
-          <li>
-            <span class="lg b">B</span>
-            <span><strong>Plasma burst</strong> +40 ammo</span>
-          </li>
-          <li>
-            <span class="lg m">M</span>
-            <span><strong>Missile</strong> — <kbd>E</kbd> heat-seeker</span>
-          </li>
-          <li>
-            <span class="lg r">R</span>
-            <span><strong>Missile rack</strong> +2</span>
-          </li>
-          <li>
-            <span class="lg d">D</span>
-            <span><strong>Mines</strong> +2 — <kbd>C</kbd> drop behind you</span>
-          </li>
-          <li>
-            <span class="lg x">X</span>
-            <span><strong>Mine cluster</strong> +4 mines</span>
-          </li>
-          <li>
-            <span class="lg n">N</span>
-            <span><strong>Nitro</strong> short boost (~2.6s)</span>
-          </li>
-          <li>
-            <span class="lg t">T</span>
-            <span><strong>Turbo nitro</strong> longer burn (~4.2s)</span>
-          </li>
-          <li>
-            <span class="lg s">S</span>
-            <span><strong>Shield</strong> ~5s — less damage</span>
-          </li>
-          <li>
-            <span class="lg s8">8</span>
-            <span><strong>Heavy shield</strong> ~8s — stronger</span>
-          </li>
-        </ul>
-      </aside>
       <div
         id="pickup-toast"
         class="pickup-toast hidden"
@@ -176,34 +123,87 @@
             </button>
           </div>
         </div>
-        <div id="menu-panel-controls" class="menu-panel menu-panel-controls hidden">
-          <h2 class="menu-controls-title">Controls</h2>
-          <div class="menu-controls-scroll" aria-label="Keyboard">
-            <section class="menu-controls-block">
-              <h3 class="menu-controls-heading">Drive</h3>
-              <ul class="menu-controls-list">
+        <div id="menu-panel-instructions" class="menu-panel menu-panel-instructions hidden">
+          <h2 class="menu-instructions-title">Instructions</h2>
+          <div class="menu-instructions-scroll" aria-label="Controls and pickups">
+            <section class="menu-instructions-block">
+              <h3 class="menu-instructions-heading">Drive</h3>
+              <ul class="menu-instructions-list">
                 <li><kbd>W</kbd> <kbd>A</kbd> <kbd>S</kbd> <kbd>D</kbd> or arrow keys — steer &amp; throttle / reverse</li>
                 <li><kbd>Shift</kbd> — handbrake (tighter turns at speed)</li>
               </ul>
             </section>
-            <section class="menu-controls-block">
-              <h3 class="menu-controls-heading">Weapons</h3>
-              <ul class="menu-controls-list">
+            <section class="menu-instructions-block">
+              <h3 class="menu-instructions-heading">Weapons</h3>
+              <ul class="menu-instructions-list">
                 <li><kbd>F</kbd> — plasma cannon (forward)</li>
                 <li><kbd>E</kbd> — homing missile (aim cone)</li>
                 <li><kbd>C</kbd> — drop mine behind you</li>
               </ul>
             </section>
-            <section class="menu-controls-block">
-              <h3 class="menu-controls-heading">Menu &amp; pause</h3>
-              <ul class="menu-controls-list">
+            <section class="menu-instructions-block">
+              <h3 class="menu-instructions-heading">Menu &amp; pause</h3>
+              <ul class="menu-instructions-list">
                 <li><kbd>Esc</kbd> / <kbd>P</kbd> — pause (+ resume from pause menu)</li>
                 <li><kbd>Space</kbd> — from title: start race; from pause: resume (after 3…2…1)</li>
               </ul>
             </section>
+            <section class="menu-instructions-block">
+              <h3 class="menu-instructions-heading">Track pickups</h3>
+              <ul class="menu-pickups-list">
+                <li>
+                  <span class="lg h">H</span>
+                  <span><strong>Repair</strong> +38 HP (cap at max)</span>
+                </li>
+                <li>
+                  <span class="lg h2">!</span>
+                  <span><strong>Full repair</strong> to 100% HP</span>
+                </li>
+                <li>
+                  <span class="lg p">P</span>
+                  <span><strong>Plasma</strong> ammo — <kbd>F</kbd> forward shots</span>
+                </li>
+                <li>
+                  <span class="lg b">B</span>
+                  <span><strong>Plasma burst</strong> +40 ammo</span>
+                </li>
+                <li>
+                  <span class="lg m">M</span>
+                  <span><strong>Missile</strong> — <kbd>E</kbd> heat-seeker</span>
+                </li>
+                <li>
+                  <span class="lg r">R</span>
+                  <span><strong>Missile rack</strong> +2</span>
+                </li>
+                <li>
+                  <span class="lg d">D</span>
+                  <span><strong>Mines</strong> +2 — <kbd>C</kbd> drop behind you</span>
+                </li>
+                <li>
+                  <span class="lg x">X</span>
+                  <span><strong>Mine cluster</strong> +4 mines</span>
+                </li>
+                <li>
+                  <span class="lg n">N</span>
+                  <span><strong>Nitro</strong> short boost (~2.6s)</span>
+                </li>
+                <li>
+                  <span class="lg t">T</span>
+                  <span><strong>Turbo nitro</strong> longer burn (~4.2s)</span>
+                </li>
+                <li>
+                  <span class="lg s">S</span>
+                  <span><strong>Shield</strong> ~5s — less damage</span>
+                </li>
+                <li>
+                  <span class="lg s8">8</span>
+                  <span><strong>Heavy shield</strong> ~8s — stronger</span>
+                </li>
+              </ul>
+            </section>
           </div>
           <div class="menu-actions">
-            <button type="button" class="menu-btn menu-btn-primary" id="btn-controls-back">
+            <button type="button" class="menu-btn menu-btn-primary" id="btn-instructions-back">
               Back
             </button>
           </div>
@@ -216,8 +216,8 @@
             <button type="button" class="menu-btn menu-btn-primary" id="btn-new-game">
               New game
             </button>
-            <button type="button" class="menu-btn" id="btn-title-controls">
-              Controls
+            <button type="button" class="menu-btn" id="btn-title-instructions">
+              Instructions
             </button>
             <button type="button" class="menu-btn" id="btn-title-audio">
               Audio
@@ -246,8 +246,8 @@
             <button type="button" class="menu-btn" id="btn-restart-race">
               Restart race
             </button>
-            <button type="button" class="menu-btn" id="btn-pause-controls">
-              Controls
+            <button type="button" class="menu-btn" id="btn-pause-instructions">
+              Instructions
             </button>
             <button type="button" class="menu-btn" id="btn-pause-audio">
               Audio
