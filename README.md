@@ -50,6 +50,13 @@ npm run dist:dir
 
 Build the way you ship: run `npm run dist` **on the target OS** (or use CI). Cross-compiling Electron native modules from one OS to another is not the default workflow; use a matrix on GitHub Actions if you need all three platforms.
 
+
+Example cross-compiling for windows from mac:
+
+```bash
+npm run dist -- --win
+```
+
 ## Project layout
 
 | Path | Purpose |

@@ -325,7 +325,7 @@ function parseLeaderboard() {
 /** Saves this race finish; returns 1–10 if it made the top {LEADERBOARD_MAX} saved races, else null. */
 function recordRaceFinishTime(totalSec) {
   if (!Number.isFinite(totalSec) || totalSec <= 0) {
-    renderLeaderboard();
+    renderLeaderboard(null);
     return { rank: null };
   }
   const rows = [...parseLeaderboard()];
@@ -338,38 +338,49 @@ function recordRaceFinishTime(totalSec) {
   localStorage.setItem(LEADERBOARD_KEY, JSON.stringify(next));
   const idx = next.findIndex((r) => r.ts === ts);
   const rank = idx >= 0 ? idx + 1 : null;
-  renderLeaderboard();
+  renderLeaderboard(rank != null ? ts : null);
   return { rank };
 }
 
-function renderLeaderboard() {
-  const lists = [
-    document.getElementById("leaderboard-list-title"),
-    document.getElementById("leaderboard-list-finish"),
-  ].filter(Boolean);
+/** @param finishHighlightTs `row.ts` of this race to highlight on the finish overlay list only; omit/null to clear. */
+function renderLeaderboard(finishHighlightTs = null) {
+  const titleList = document.getElementById("leaderboard-list-title");
+  const finishList = document.getElementById("leaderboard-list-finish");
+  fillLeaderboardList(titleList, null);
+  fillLeaderboardList(finishList, finishHighlightTs);
+}
+
+function fillLeaderboardList(listEl, highlightTs) {
+  if (!listEl) return;
+  listEl.innerHTML = "";
   const data = parseLeaderboard();
-  for (const list of lists) {
-    list.innerHTML = "";
-    if (data.length === 0) {
-      const li = document.createElement("li");
-      li.className = "leaderboard-empty";
-      li.textContent = "No races saved yet — finish one!";
-      list.appendChild(li);
-      continue;
-    }
-    data.forEach((row, i) => {
-      const li = document.createElement("li");
-      const rank = document.createElement("span");
-      rank.className = "lb-rank";
-      rank.textContent = `${i + 1}.`;
-      const timeEl = document.createElement("span");
-      timeEl.className = "lb-time";
-      timeEl.textContent = formatTime(row.time);
-      li.appendChild(rank);
-      li.appendChild(timeEl);
-      list.appendChild(li);
-    });
+  if (data.length === 0) {
+    const li = document.createElement("li");
+    li.className = "leaderboard-empty";
+    li.textContent = "No races saved yet — finish one!";
+    listEl.appendChild(li);
+    return;
   }
+  data.forEach((row, i) => {
+    const li = document.createElement("li");
+    if (
+      highlightTs != null &&
+      row.ts != null &&
+      row.ts === highlightTs
+    ) {
+      li.classList.add("leaderboard-row--you");
+      li.setAttribute("aria-label", `Your result, rank ${i + 1}`);
+    }
+    const rank = document.createElement("span");
+    rank.className = "lb-rank";
+    rank.textContent = `${i + 1}.`;
+    const timeEl = document.createElement("span");
+    timeEl.className = "lb-time";
+    timeEl.textContent = formatTime(row.time);
+    li.appendChild(rank);
+    li.appendChild(timeEl);
+    listEl.appendChild(li);
+  });
 }
 
 const canvas = document.getElementById("game");
@@ -1432,7 +1443,7 @@ function showTitleMenu() {
       });
     });
   }
-  renderLeaderboard();
+  renderLeaderboard(null);
 }
 
 function openRaceOrCountdownMenu() {
@@ -1920,6 +1931,7 @@ function beginRaceFromGrid() {
   chatTauntNext = 3 + Math.random() * 6;
   addChatLine("Race", "#6b7a8f", "Green flag — good luck!");
   updateHud();
+  renderLeaderboard(null);
 }
 
 function startSequence() {

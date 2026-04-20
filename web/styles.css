@@ -716,6 +716,20 @@ body {
   border-bottom: none;
 }
 
+.leaderboard-list li.leaderboard-row--you {
+  background: rgba(0, 229, 255, 0.12);
+  border-left: 3px solid var(--accent);
+  margin: 0.1rem -0.25rem;
+  padding: 0.2rem 0.45rem 0.2rem 0.5rem;
+  border-radius: 6px;
+  border-bottom-color: transparent;
+  box-shadow: 0 0 18px rgba(0, 229, 255, 0.12);
+}
+
+.leaderboard-list li.leaderboard-row--you .lb-time {
+  color: #b2ffff;
+}
+
 .lb-rank {
   color: var(--muted);
   min-width: 1.5rem;
