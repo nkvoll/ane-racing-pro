@@ -3661,13 +3661,14 @@ function frame(now) {
     updateHud();
   }
 
-  const musicInMenu =
+  /* Title screen menu only; during race/countdown/finished keep BGM even when paused (pause menu / restart countdown). */
+  const musicOnTitleMenu =
     state.menuOpen &&
-    (state.menuContext === "title" ||
-      state.menuContext === "race" ||
-      state.menuContext === "countdown");
-  const musicInRace = state.mode === "race" && !state.paused;
-  if (musicInMenu || musicInRace) {
+    state.menuContext === "title" &&
+    state.mode === "title";
+  const musicInRacingFlow =
+    state.mode === "countdown" || state.mode === "race" || state.mode === "finished";
+  if (musicOnTitleMenu || musicInRacingFlow) {
     try {
       audio.updateMusic(dt);
     } catch (_) {}
