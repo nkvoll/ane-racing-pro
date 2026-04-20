@@ -800,6 +800,75 @@ export function buildTrackLayout(control, opts = {}) {
   };
 }
 
+/** Axis-aligned bounds of `roadOutline` (outer + holes), for gradients / view fitting. */
+export function boundsRoadOutline(roadOutline) {
+  let minX = Infinity;
+  let minY = Infinity;
+  let maxX = -Infinity;
+  let maxY = -Infinity;
+  function visit(ring) {
+    if (!ring) return;
+    for (const p of ring) {
+      minX = Math.min(minX, p.x);
+      minY = Math.min(minY, p.y);
+      maxX = Math.max(maxX, p.x);
+      maxY = Math.max(maxY, p.y);
+    }
+  }
+  if (!roadOutline?.outer) {
+    return { minX: 0, minY: 0, maxX: 1, maxY: 1 };
+  }
+  visit(roadOutline.outer);
+  for (const h of roadOutline.holes || []) visit(h);
+  if (!Number.isFinite(minX)) {
+    return { minX: 0, minY: 0, maxX: 1, maxY: 1 };
+  }
+  return { minX, minY, maxX, maxY };
+}
+
+function appendClosedRingToCanvasPath(ctx, ring) {
+  if (!ring || ring.length < 3) return;
+  ctx.moveTo(ring[0].x, ring[0].y);
+  for (let i = 1; i <= ring.length; i++) {
+    const p = ring[i % ring.length];
+    ctx.lineTo(p.x, p.y);
+  }
+}
+
+/**
+ * Append outer ring then each hole as separate subpaths. Caller should `beginPath()` first; use `fill("evenodd")`.
+ * Correct for self-overlapping tracks (e.g. figure-8) — unlike resampled inner/outer ribbons.
+ * @param {CanvasRenderingContext2D} ctx
+ * @param {{ outer: {x:number,y:number}[], holes?: {x:number,y:number}[][] }} roadOutline
+ */
+export function appendRoadOutlineToCanvasPath(ctx, roadOutline) {
+  if (!roadOutline?.outer || roadOutline.outer.length < 3) return;
+  appendClosedRingToCanvasPath(ctx, roadOutline.outer);
+  for (const h of roadOutline.holes || []) {
+    appendClosedRingToCanvasPath(ctx, h);
+  }
+}
+
+/**
+ * Stroke each boundary ring separately (outer + hole perimeters).
+ * @param {CanvasRenderingContext2D} ctx
+ */
+export function strokeRoadOutlineBoundaries(ctx, roadOutline) {
+  if (!roadOutline?.outer || roadOutline.outer.length < 3) return;
+  function strokeRing(ring) {
+    if (!ring || ring.length < 3) return;
+    ctx.beginPath();
+    ctx.moveTo(ring[0].x, ring[0].y);
+    for (let i = 1; i <= ring.length; i++) {
+      const p = ring[i % ring.length];
+      ctx.lineTo(p.x, p.y);
+    }
+    ctx.stroke();
+  }
+  strokeRing(roadOutline.outer);
+  for (const h of roadOutline.holes || []) strokeRing(h);
+}
+
 /** For diagnostics: raw segment count vs stitched polygons (marching squares + stitch). */
 export function debugMarchingSquareStats(control, opts = {}) {
   const width = opts.trackWidth != null ? opts.trackWidth : TRACK_WIDTH;

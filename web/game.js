@@ -10,7 +10,14 @@ import {
   deleteCustomTrack,
 } from "./custom-tracks.js";
 import { initTrackEditor } from "./track-editor.js";
-import { buildTrackLayout, distPointSegment, TRACK_WIDTH } from "./track-geometry.js";
+import {
+  appendRoadOutlineToCanvasPath,
+  boundsRoadOutline,
+  buildTrackLayout,
+  distPointSegment,
+  strokeRoadOutlineBoundaries,
+  TRACK_WIDTH,
+} from "./track-geometry.js";
 
 const TAU = Math.PI * 2;
 
@@ -74,6 +81,7 @@ class Track {
     this.width = g.width;
     this.inner = g.inner;
     this.outer = g.outer;
+    this.roadOutline = g.roadOutline;
     this.wallSegments = g.wallSegments;
     this.finishLine = g.finishLine;
     this.midCheckpoint = g.midCheckpoint;
@@ -88,6 +96,15 @@ class Track {
     const len = hypot(tx, ty) || 1;
     return { x: tx / len, y: ty / len };
   }
+}
+
+/** True road silhouette from layout (figure-8, cross, etc.); falls back to ribbon if absent. */
+function roadOutlineForTrack(tr) {
+  if (tr.roadOutline?.outer?.length >= 3) return tr.roadOutline;
+  return {
+    outer: tr.outer,
+    holes: tr.inner?.length >= 3 ? [tr.inner] : [],
+  };
 }
 
 const trackCache = new Map();
@@ -1514,22 +1531,12 @@ function drawTrackPreviewCanvas(cnv, levelUid) {
   const ctx = cnv.getContext("2d");
   if (!ctx) return;
   const tr = buildTrackForLevel(levelUid);
-  let minX = Infinity;
-  let minY = Infinity;
-  let maxX = -Infinity;
-  let maxY = -Infinity;
-  for (const p of tr.outer) {
-    minX = Math.min(minX, p.x);
-    minY = Math.min(minY, p.y);
-    maxX = Math.max(maxX, p.x);
-    maxY = Math.max(maxY, p.y);
-  }
-  for (const p of tr.inner) {
-    minX = Math.min(minX, p.x);
-    minY = Math.min(minY, p.y);
-    maxX = Math.max(maxX, p.x);
-    maxY = Math.max(maxY, p.y);
-  }
+  const ro = roadOutlineForTrack(tr);
+  const b = boundsRoadOutline(ro);
+  let minX = b.minX;
+  let minY = b.minY;
+  let maxX = b.maxX;
+  let maxY = b.maxY;
   const bw = maxX - minX;
   const bh = maxY - minY;
   const pad = 26;
@@ -1542,17 +1549,7 @@ function drawTrackPreviewCanvas(cnv, levelUid) {
   ctx.fillRect(0, 0, w, h);
   ctx.setTransform(s, 0, 0, s, w / 2 - cx * s, h / 2 - cy * s);
   ctx.beginPath();
-  ctx.moveTo(tr.outer[0].x, tr.outer[0].y);
-  for (let i = 1; i <= tr.n; i++) {
-    const p = tr.outer[i % tr.n];
-    ctx.lineTo(p.x, p.y);
-  }
-  ctx.moveTo(tr.inner[0].x, tr.inner[0].y);
-  for (let i = 1; i <= tr.n; i++) {
-    const p = tr.inner[i % tr.n];
-    ctx.lineTo(p.x, p.y);
-  }
-  ctx.closePath();
+  appendRoadOutlineToCanvasPath(ctx, ro);
   const grd = ctx.createLinearGradient(minX, minY, maxX, maxY);
   grd.addColorStop(0, "#2d333f");
   grd.addColorStop(1, "#1a1e28");
@@ -1560,18 +1557,7 @@ function drawTrackPreviewCanvas(cnv, levelUid) {
   ctx.fill("evenodd");
   ctx.strokeStyle = "rgba(255,255,255,0.55)";
   ctx.lineWidth = 3 / s;
-  ctx.beginPath();
-  ctx.moveTo(tr.outer[0].x, tr.outer[0].y);
-  for (let i = 1; i <= tr.n; i++) {
-    ctx.lineTo(tr.outer[i % tr.n].x, tr.outer[i % tr.n].y);
-  }
-  ctx.stroke();
-  ctx.beginPath();
-  ctx.moveTo(tr.inner[0].x, tr.inner[0].y);
-  for (let i = 1; i <= tr.n; i++) {
-    ctx.lineTo(tr.inner[i % tr.n].x, tr.inner[i % tr.n].y);
-  }
-  ctx.stroke();
+  strokeRoadOutlineBoundaries(ctx, ro);
   ctx.setLineDash([10 / s, 8 / s]);
   ctx.strokeStyle = "rgba(255,255,255,0.2)";
   ctx.lineWidth = 2 / s;
@@ -2617,43 +2603,21 @@ function drawWorld() {
     ctx.stroke();
   }
 
-  // Track fill (even-odd)
+  // Track fill (true road union — same silhouette as wall collision)
+  const ro = roadOutlineForTrack(track);
   ctx.beginPath();
-  ctx.moveTo(track.outer[0].x, track.outer[0].y);
-  for (let i = 1; i <= track.n; i++) {
-    const p = track.outer[i % track.n];
-    ctx.lineTo(p.x, p.y);
-  }
-  ctx.moveTo(track.inner[0].x, track.inner[0].y);
-  for (let i = 1; i <= track.n; i++) {
-    const p = track.inner[i % track.n];
-    ctx.lineTo(p.x, p.y);
-  }
-  ctx.closePath();
+  appendRoadOutlineToCanvasPath(ctx, ro);
   const grd = ctx.createLinearGradient(-1200, -800, 1200, 800);
   grd.addColorStop(0, "#2d333f");
   grd.addColorStop(1, "#1e222b");
   ctx.fillStyle = grd;
   ctx.fill("evenodd");
 
-  // Edge lines
+  // Edge lines (outer + hole perimeters)
   ctx.strokeStyle = "rgba(255,255,255,0.92)";
   ctx.lineWidth = 3 / z;
   ctx.lineJoin = "round";
-  ctx.beginPath();
-  ctx.moveTo(track.outer[0].x, track.outer[0].y);
-  for (let i = 1; i <= track.n; i++) {
-    const p = track.outer[i % track.n];
-    ctx.lineTo(p.x, p.y);
-  }
-  ctx.stroke();
-  ctx.beginPath();
-  ctx.moveTo(track.inner[0].x, track.inner[0].y);
-  for (let i = 1; i <= track.n; i++) {
-    const p = track.inner[i % track.n];
-    ctx.lineTo(p.x, p.y);
-  }
-  ctx.stroke();
+  strokeRoadOutlineBoundaries(ctx, ro);
 
   // Center dashed racing line
   ctx.setLineDash([14 / z, 12 / z]);
@@ -2670,10 +2634,12 @@ function drawWorld() {
 
   // Kerbs (every 4th outer segment) — skip near sector so red/white rumble doesn't read as a barrier
   const midK = track.midCheckpoint;
-  for (let i = 0; i < track.n; i += 4) {
-    const j = (i + 1) % track.n;
-    const o0 = track.outer[i];
-    const o1 = track.outer[j];
+  const outerEdge = ro.outer;
+  const nEdge = outerEdge.length;
+  for (let i = 0; i < nEdge; i += 4) {
+    const j = (i + 1) % nEdge;
+    const o0 = outerEdge[i];
+    const o1 = outerEdge[j];
     if (
       distPointSegment(midK.x, midK.y, o0.x, o0.y, o1.x, o1.y) <
       midK.r + track.width * 0.55

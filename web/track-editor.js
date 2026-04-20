@@ -3,7 +3,13 @@
  */
 
 import { exportTrackJson, downloadBlob, importTrackFromJson } from "./custom-tracks.js";
-import { buildTrackLayout, TRACK_WIDTH } from "./track-geometry.js";
+import {
+  appendRoadOutlineToCanvasPath,
+  boundsRoadOutline,
+  buildTrackLayout,
+  strokeRoadOutlineBoundaries,
+  TRACK_WIDTH,
+} from "./track-geometry.js";
 
 function hypot(a, b) {
   return Math.sqrt(a * a + b * b);
@@ -267,18 +273,11 @@ export function initTrackEditor(opts) {
       maxY = -Infinity;
     const mesh = computeEditorMesh();
     if (mesh) {
-      for (const p of mesh.outer) {
-        minX = Math.min(minX, p.x);
-        minY = Math.min(minY, p.y);
-        maxX = Math.max(maxX, p.x);
-        maxY = Math.max(maxY, p.y);
-      }
-      for (const p of mesh.inner) {
-        minX = Math.min(minX, p.x);
-        minY = Math.min(minY, p.y);
-        maxX = Math.max(maxX, p.x);
-        maxY = Math.max(maxY, p.y);
-      }
+      const b = boundsRoadOutline(mesh.roadOutline);
+      minX = b.minX;
+      minY = b.minY;
+      maxX = b.maxX;
+      maxY = b.maxY;
     } else {
       for (const p of points) {
         minX = Math.min(minX, p.x);
@@ -354,35 +353,15 @@ export function initTrackEditor(opts) {
     const mesh = computeEditorMesh();
     const z = view.scale;
     if (mesh) {
-      let minX = Infinity,
-        minY = Infinity,
-        maxX = -Infinity,
-        maxY = -Infinity;
-      for (const p of mesh.outer) {
-        minX = Math.min(minX, p.x);
-        minY = Math.min(minY, p.y);
-        maxX = Math.max(maxX, p.x);
-        maxY = Math.max(maxY, p.y);
-      }
-      for (const p of mesh.inner) {
-        minX = Math.min(minX, p.x);
-        minY = Math.min(minY, p.y);
-        maxX = Math.max(maxX, p.x);
-        maxY = Math.max(maxY, p.y);
-      }
+      const b = boundsRoadOutline(mesh.roadOutline);
+      const minX = b.minX;
+      const minY = b.minY;
+      const maxX = b.maxX;
+      const maxY = b.maxY;
+      const ro = mesh.roadOutline;
 
       ctx.beginPath();
-      ctx.moveTo(mesh.outer[0].x, mesh.outer[0].y);
-      for (let i = 1; i <= mesh.n; i++) {
-        const p = mesh.outer[i % mesh.n];
-        ctx.lineTo(p.x, p.y);
-      }
-      ctx.moveTo(mesh.inner[0].x, mesh.inner[0].y);
-      for (let i = 1; i <= mesh.n; i++) {
-        const p = mesh.inner[i % mesh.n];
-        ctx.lineTo(p.x, p.y);
-      }
-      ctx.closePath();
+      appendRoadOutlineToCanvasPath(ctx, ro);
       const grd = ctx.createLinearGradient(minX, minY, maxX, maxY);
       grd.addColorStop(0, "#2d333f");
       grd.addColorStop(1, "#1e222b");
@@ -392,18 +371,7 @@ export function initTrackEditor(opts) {
       ctx.strokeStyle = "rgba(255,255,255,0.88)";
       ctx.lineWidth = 3 / z;
       ctx.lineJoin = "round";
-      ctx.beginPath();
-      ctx.moveTo(mesh.outer[0].x, mesh.outer[0].y);
-      for (let i = 1; i <= mesh.n; i++) {
-        ctx.lineTo(mesh.outer[i % mesh.n].x, mesh.outer[i % mesh.n].y);
-      }
-      ctx.stroke();
-      ctx.beginPath();
-      ctx.moveTo(mesh.inner[0].x, mesh.inner[0].y);
-      for (let i = 1; i <= mesh.n; i++) {
-        ctx.lineTo(mesh.inner[i % mesh.n].x, mesh.inner[i % mesh.n].y);
-      }
-      ctx.stroke();
+      strokeRoadOutlineBoundaries(ctx, ro);
 
       ctx.setLineDash([14 / z, 12 / z]);
       ctx.strokeStyle = "rgba(255,255,255,0.22)";
