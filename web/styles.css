@@ -209,6 +209,8 @@ body {
   justify-content: flex-end;
   align-items: flex-start;
   pointer-events: none;
+  width: 100%;
+  box-sizing: border-box;
 }
 
 .hud-arsenal-only .arsenal-panel {
@@ -247,10 +249,6 @@ body {
 @media (max-width: 900px) {
   .hud-combat {
     grid-template-columns: 1fr;
-  }
-
-  .hud-arsenal-only {
-    justify-content: center;
   }
 }
 

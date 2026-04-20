@@ -24,6 +24,17 @@ function hypot(dx, dy) {
   return Math.sqrt(dx * dx + dy * dy);
 }
 
+/** Darken a #rrggbb color for gradients / edges (fallback: return as-is). */
+function hexDarken(hex, t = 0.5) {
+  const m = String(hex).match(/^#?([\da-f]{2})([\da-f]{2})([\da-f]{2})$/i);
+  if (!m) return "rgb(20,24,32)";
+  const k = 1 - t;
+  const r = Math.round(parseInt(m[1], 16) * k);
+  const g = Math.round(parseInt(m[2], 16) * k);
+  const b = Math.round(parseInt(m[3], 16) * k);
+  return `rgb(${r},${g},${b})`;
+}
+
 function catmullRom(p0, p1, p2, p3, t) {
   const t2 = t * t;
   const t3 = t2 * t;
@@ -1232,6 +1243,10 @@ const state = {
   totalLaps: 3,
   lapStartTime: 0,
   raceStartTime: 0,
+  /** Running race clock (seconds), advanced only while mode===race && !paused */
+  raceElapsedSec: 0,
+  /** Set when a race ends — HUD “Race” time after finish */
+  raceTotalTimeAtFinish: null,
   currentLapTime: 0,
   lastLapTime: null,
   bestLap: Number(localStorage.getItem("aneRacingBestLap"))
@@ -1590,7 +1605,13 @@ function updateHud() {
       placeDisplayEl.textContent = "—";
     }
   }
-  currentTimeEl.textContent = formatTime(state.currentLapTime);
+  if (state.mode === "finished" && state.raceTotalTimeAtFinish != null) {
+    currentTimeEl.textContent = formatTime(state.raceTotalTimeAtFinish);
+  } else if (state.mode === "race") {
+    currentTimeEl.textContent = formatTime(state.raceElapsedSec);
+  } else {
+    currentTimeEl.textContent = "--:--.--";
+  }
 
   const pl = player;
   ammoCannonEl.textContent = String(Math.floor(pl.ammoCannon));
@@ -1768,6 +1789,8 @@ function checkCarLap(car, prev, curr) {
   if (player.raceLap > state.totalLaps) {
     state.mode = "finished";
     const totalTime = now - state.raceStartTime;
+    state.raceTotalTimeAtFinish = totalTime;
+    state.raceElapsedSec = totalTime;
     const { rank } = recordRaceFinishTime(totalTime);
     showOverlay(
       "Finish!",
@@ -1915,6 +1938,8 @@ function beginRaceFromGrid() {
   state.lastLapTime = null;
   state.lapStartTime = performance.now() / 1000;
   state.raceStartTime = state.lapStartTime;
+  state.raceElapsedSec = 0;
+  state.raceTotalTimeAtFinish = null;
   state.mode = "race";
   state.paused = false;
   state.menuOpen = false;
@@ -2223,18 +2248,23 @@ function drawWorld() {
     const grd = ctx.createRadialGradient(0, 0, 1, 0, 0, ro);
     grd.addColorStop(0, "rgba(10,10,14,0.95)");
     grd.addColorStop(0.55, col);
-    grd.addColorStop(1, armed ? "#8b0000" : "#333");
+    grd.addColorStop(1, armed ? hexDarken(col, 0.45) : hexDarken(col, 0.7));
     ctx.fillStyle = grd;
     ctx.fill();
-    ctx.strokeStyle = armed ? "#ff1744" : "#555";
+    ctx.strokeStyle = armed ? col : "rgba(255,255,255,0.35)";
+    ctx.globalAlpha = armed ? 0.92 : 0.55;
     ctx.lineWidth = 2.2 / z;
     ctx.stroke();
+    ctx.globalAlpha = 1;
     if (armed) {
-      ctx.strokeStyle = `rgba(255,23,68,${0.35 + Math.sin(performance.now() * 0.012) * 0.25})`;
+      const pulse = 0.35 + Math.sin(performance.now() * 0.012) * 0.25;
+      ctx.strokeStyle = col;
+      ctx.globalAlpha = pulse;
       ctx.lineWidth = 3 / z;
       ctx.beginPath();
       ctx.arc(0, 0, ro + 5, 0, TAU);
       ctx.stroke();
+      ctx.globalAlpha = 1;
     }
     ctx.fillStyle = "#fff";
     ctx.font = `bold ${11 / z}px Orbitron,sans-serif`;
@@ -2318,7 +2348,8 @@ function drawWorld() {
       if (h > 0.003) {
         ctx.save();
         ctx.beginPath();
-        ctx.rect(rx - 0.5, ry + rh * (1 - h), rw + 1, rh * h + 0.5);
+        /* Hull infill: rear (−x) → front (+x), like a bar along the car */
+        ctx.rect(rx - 0.5, ry - 0.5, rw * h + 0.5, rh + 1);
         ctx.clip();
         carBodyPath(ctx, rx, ry, rw, rh, rr);
         ctx.fillStyle = car.color;
@@ -2487,6 +2518,9 @@ function frame(now) {
 
     const t = now / 1000;
     state.currentLapTime = t - state.lapStartTime;
+    if (state.mode === "race") {
+      state.raceElapsedSec += dt;
+    }
     updateHud();
   } else if (state.mode === "race" && state.paused) {
     updateHud();
