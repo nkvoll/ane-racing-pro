@@ -71,7 +71,7 @@ export function createCustomTrack(data) {
     uid,
     name: String(data.name || "Untitled track").slice(0, 80),
     control: data.control.map((p) => ({ x: p.x, y: p.y })),
-    subdiv: clamp(Math.round(data.subdiv ?? 14), 8, 20),
+    subdiv: clamp(Math.round(data.subdiv ?? 16), 8, 20),
     widthScale: clamp(Number(data.widthScale ?? 1), 0.75, 1.35),
     createdAt: existing?.createdAt || new Date().toISOString(),
   };
@@ -98,7 +98,7 @@ export function exportTrackJson(rec) {
     uid: rec.uid,
     name: rec.name,
     control: rec.control.map((p) => ({ x: p.x, y: p.y })),
-    subdiv: rec.subdiv ?? 14,
+    subdiv: rec.subdiv ?? 16,
     widthScale: rec.widthScale ?? 1,
     exportedAt: new Date().toISOString(),
   };
@@ -137,7 +137,7 @@ export function importTrackFromJson(jsonText) {
     uid: newUid(),
     name: String(o.name || "Imported track").slice(0, 80),
     control: pts,
-    subdiv: clamp(Math.round(o.subdiv ?? 14), 8, 20),
+    subdiv: clamp(Math.round(o.subdiv ?? 16), 8, 20),
     widthScale: clamp(Number(o.widthScale ?? 1), 0.75, 1.35),
     createdAt: new Date().toISOString(),
   };

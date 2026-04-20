@@ -5,6 +5,11 @@
 export const DEFAULT_SUBDIV = 14;
 export const TRACK_WIDTH = 162;
 
+/** Inner road half-width cannot exceed ~local curvature radius or parallel offsets fold (hairpins). */
+const INNER_HW_FLOOR_FRAC = 0.12;
+/** Fraction of estimated corner radius allowed for inner offset (below full half-width). */
+const INNER_HW_RADIUS_FRAC = 0.92;
+
 function hypotXY(dx, dy) {
   return Math.sqrt(dx * dx + dy * dy);
 }
@@ -113,8 +118,30 @@ export function buildTrackLayout(control, opts = {}) {
     const nx = -ty;
     const ny = tx;
     const hw = width * 0.5;
+
+    const tix = p1.x - p0.x;
+    const tiy = p1.y - p0.y;
+    const tox = p2.x - p1.x;
+    const toy = p2.y - p1.y;
+    const lenIn = hypotXY(tix, tiy);
+    const lenOut = hypotXY(tox, toy);
+    const eLen = Math.max(1e-6, lenIn * lenOut);
+    /** Turning angle along the path: 0 on straights, π at a U-turn. */
+    const cosB = clamp((tix * tox + tiy * toy) / eLen, -1, 1);
+    const beta = Math.acos(cosB);
+    const sAvg = (lenIn + lenOut) * 0.5;
+    const sinHalf = Math.sin(beta * 0.5);
+    /** Discrete estimate of curve radius at this sample (exact for a circular arc). */
+    const estR = sinHalf > 1e-8 ? sAvg / (2 * sinHalf) : 1e12;
+    const capFromRadius = INNER_HW_RADIUS_FRAC * estR;
+    /** Miter-style limit only when the path actually bends (straight => beta≈0). */
+    const capFromMiter =
+      beta > 0.04 ? Math.min(hw, 2.35 * hw * sinHalf) : hw;
+    let hwInner = Math.min(hw, capFromRadius, capFromMiter);
+    hwInner = Math.max(hwInner, hw * INNER_HW_FLOOR_FRAC);
+
     outer.push({ x: p1.x + nx * hw, y: p1.y + ny * hw });
-    inner.push({ x: p1.x - nx * hw, y: p1.y - ny * hw });
+    inner.push({ x: p1.x - nx * hwInner, y: p1.y - ny * hwInner });
   }
 
   for (let i = 0; i < n; i++) {

@@ -723,6 +723,10 @@ body {
   margin: 0.5rem 0 0.35rem;
 }
 
+.level-select-custom-actions.hidden {
+  display: none !important;
+}
+
 .level-select-custom-actions .menu-btn {
   flex: 1 1 120px;
 }
@@ -881,6 +885,27 @@ body {
   max-width: 52rem;
   margin-left: auto;
   margin-right: auto;
+}
+
+.track-editor-min-points-notice {
+  margin: 0 0 0.45rem;
+  padding: 0.45rem 0.65rem;
+  font-size: 0.7rem;
+  line-height: 1.4;
+  color: var(--muted);
+  text-align: center;
+  border: 1px solid rgba(255, 213, 79, 0.28);
+  border-radius: 4px;
+  background: rgba(255, 213, 79, 0.06);
+}
+
+.track-editor-min-points-notice.hidden {
+  display: none !important;
+}
+
+.track-editor-min-points-notice strong {
+  color: var(--gold);
+  font-weight: 600;
 }
 
 .track-editor-shell {

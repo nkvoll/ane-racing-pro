@@ -191,8 +191,8 @@
         <div id="menu-panel-track-editor" class="menu-panel menu-panel-track-editor hidden">
           <h2 class="track-editor-heading">Track editor</h2>
           <p class="track-editor-lede">
-            Place corners or sketch a loop, then tune road width and smoothness. Export JSON to share
-            — friends use Import on the track list.
+            Place corners or sketch a loop — keep anchors spaced apart in tight bends. Tune width and
+            smoothing below.
           </p>
           <div class="track-editor-shell">
             <div class="track-editor-controls-top">
@@ -203,9 +203,20 @@
                 </button>
                 <button type="button" class="menu-btn" id="track-editor-mode-draw">Sketch</button>
                 <button type="button" class="menu-btn" id="track-editor-undo">Undo</button>
+                <button type="button" class="menu-btn" id="track-editor-delete-point" disabled>
+                  Delete point
+                </button>
                 <button type="button" class="menu-btn" id="track-editor-clear">Clear</button>
                 <button type="button" class="menu-btn" id="track-editor-fit">Fit view</button>
               </div>
+              <p
+                id="track-editor-min-points-notice"
+                class="track-editor-min-points-notice"
+                role="status"
+              >
+                Add <strong>at least 4</strong> control points (corners) — then close the loop on the
+                yellow start before saving or racing.
+              </p>
               <p id="track-editor-hint" class="track-editor-hint" role="status"></p>
             </div>
             <div class="track-editor-canvas-wrap">
@@ -225,16 +236,25 @@
               </label>
               <label class="track-editor-field">
                 <span class="track-editor-field-label">Smoothing (subdiv)</span>
-                <input id="track-editor-subdiv" type="number" min="8" max="20" step="1" class="track-editor-input track-editor-input-num" />
+                <input id="track-editor-subdiv" type="number" min="8" max="20" step="1" value="16" class="track-editor-input track-editor-input-num" />
               </label>
               <label class="track-editor-field">
                 <span class="track-editor-field-label">Road width</span>
                 <input id="track-editor-width" type="number" min="0.75" max="1.35" step="0.05" class="track-editor-input track-editor-input-num" />
               </label>
             </div>
+            <input
+              id="track-editor-import-file"
+              type="file"
+              accept=".json,application/json"
+              class="track-import-file-input"
+              aria-label="Import track JSON"
+              tabindex="-1"
+            />
             <div class="track-editor-actions menu-actions-row">
               <button type="button" class="menu-btn menu-btn-primary" id="track-editor-save">Save</button>
               <button type="button" class="menu-btn menu-btn-primary" id="track-editor-save-race">Save &amp; race</button>
+              <button type="button" class="menu-btn" id="track-editor-import">Import JSON</button>
               <button type="button" class="menu-btn" id="track-editor-export">Export JSON</button>
               <button type="button" class="menu-btn" id="track-editor-close">Back</button>
             </div>

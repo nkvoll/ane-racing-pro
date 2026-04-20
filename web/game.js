@@ -221,6 +221,20 @@ function leaderboardStorageKey() {
   return `aneRacingTop10_${activeLevelUid}`;
 }
 
+/** Clears stored top-10 race times and best lap for one track uid (layout-specific keys only). */
+function clearSavedRaceTimesForLevelUid(levelUid) {
+  try {
+    localStorage.removeItem(`aneRacingTop10_${levelUid}`);
+    localStorage.removeItem(`aneRacingBestLap_${levelUid}`);
+  } catch (_) {}
+  if (activeLevelUid === levelUid) {
+    loadBestLapFromStorage();
+  }
+  if (state.mode === "title" && menuSubScreen === "levels") {
+    syncLevelSelectUi();
+  }
+}
+
 function parseLeaderboardForLevelUid(levelUid) {
   try {
     const def = getLevelDef(levelUid);
@@ -517,6 +531,8 @@ const COMBAT = {
   CD_CANNON: 0.14,
   CD_MISSILE: 1.1,
   CD_MINE: 0.85,
+  /** Homing missile: fraction of target max HP applied on direct hit (before shield). */
+  MISSILE_HP_FRAC: 0.9,
   PROJ_SPEED: 620,
   MISSILE_TURN: 5.2,
   MINE_ARM: 0.55,
@@ -560,14 +576,14 @@ const PICKUP_META = {
   },
   missile: {
     toast: "Missile +1",
-    detail: "E — heat-seeker in your forward cone.",
+    detail: "E — heat-seeker; ~90% hull damage on connect (shield cuts it).",
     chat: "loaded a homing missile",
     color: "#ff4081",
     letter: "M",
   },
   missile_rack: {
     toast: "Missile RACK +2",
-    detail: "Two homing missiles (E per shot).",
+    detail: "Two homing missiles (E each — devastating on hit).",
     chat: "raided a missile rack",
     color: "#f50057",
     letter: "R",
@@ -987,7 +1003,7 @@ function trySpawnProjectile(car, type) {
       vy: fy * (COMBAT.PROJ_SPEED * 0.72) + car.vy * 0.2,
       owner: car,
       type: "missile",
-      dmg: 26,
+      dmg: 0,
       t: 2.4,
       ignore: 0.08,
       target,
@@ -1057,7 +1073,11 @@ function updateProjectiles(dt) {
       if (car.wrecked) continue;
       if (car === pr.owner && pr.ignore > 0) continue;
       if (hypot(car.x - pr.x, car.y - pr.y) < CAR_R + 6) {
-        applyDamage(car, pr.dmg, { x: pr.x, y: pr.y });
+        const dmg =
+          pr.type === "missile"
+            ? car.maxHp * COMBAT.MISSILE_HP_FRAC
+            : pr.dmg;
+        applyDamage(car, dmg, { x: pr.x, y: pr.y });
         spawnParticles(pr.x, pr.y, 8, "#fff", 140);
         projectiles.splice(i, 1);
         continue outer;
@@ -1578,7 +1598,10 @@ function syncLevelSelectUi() {
   if (tagEl) tagEl.textContent = L.tagline;
   const customAct = document.getElementById("level-select-custom-actions");
   if (customAct) {
-    customAct.classList.toggle("hidden", !isCustomTrackUid(levelSelectUid));
+    const isBuiltIn = LEVELS.some((L) => L.uid === levelSelectUid);
+    const showEditDelete = isCustomTrackUid(levelSelectUid) && !isBuiltIn;
+    customAct.classList.toggle("hidden", !showEditDelete);
+    customAct.setAttribute("aria-hidden", showEditDelete ? "false" : "true");
   }
   const lbEl = document.getElementById("leaderboard-list-level-select");
   if (lbEl) {
@@ -1920,7 +1943,6 @@ const ACCEL = 520;
 const FRICTION = 0.978;
 const STEER = 2.85;
 const MAX_SPEED = 420;
-const AI_MAX = 404;
 
 /** Point on the centerline ~`distAhead` forward from vertex index `fromIdx` (arc-length). */
 function getCenterPointAhead(fromIdx, distAhead) {
@@ -2098,22 +2120,36 @@ function updateCar(car, dt, input) {
     const dy = ty - car.y;
     const want = Math.atan2(dy, dx);
     let diff = wrapAngle(want - car.angle + car.aiOffset * 0.12 * startEase);
-    const steerGain = (2.65 + 0.47 * startEase) * (0.82 + 0.18 * clamp(car.speed / 120, 0, 1));
+    const absDiff = Math.abs(diff);
+    const steerGain =
+      (2.75 + 0.52 * startEase) *
+      (0.82 + 0.18 * clamp(car.speed / MAX_SPEED, 0, 1)) *
+      (1 + 0.42 * clamp(absDiff - 0.35, 0, 1.1));
     const steerAi = clamp(diff * steerGain, -1, 1);
-    car.angle += steerAi * STEER * dt * (0.88 + 0.12 * startEase);
+    /** Tighter hairpins: extra yaw + light speed bleed (player handbrake analogy). */
+    const hbSim =
+      absDiff > 0.62 && car.speed > 72
+        ? 1.22 + 0.28 * clamp((absDiff - 0.62) / 0.55, 0, 1)
+        : 1;
+    car.angle += steerAi * STEER * dt * (0.88 + 0.12 * startEase) * hbSim;
+    if (hbSim > 1.08 && car.speed > 48) {
+      const bleed = 1 - dt * 0.32 * (hbSim - 1);
+      car.vx *= bleed;
+      car.vy *= bleed;
+    }
 
     const cornerBrake = clamp(
-      Math.abs(diff) * (1.15 + 0.45 * (1 - startEase)),
+      absDiff * (1.08 + 0.38 * (1 - startEase)),
       0,
       1
     );
     let throttle =
-      (1 - cornerBrake * (0.38 + 0.16 * (1 - startEase))) *
+      (1 - cornerBrake * (0.32 + 0.12 * (1 - startEase))) *
       (0.91 + Math.sin(performance.now() * 0.0016 + car.aiOffset * 11) * 0.048);
     if (car.boostT > 0) {
       throttle *= 1.25;
     }
-    throttle *= 0.44 + 0.56 * startEase;
+    throttle *= 0.52 + 0.48 * startEase;
     const ax = Math.cos(car.angle) * ACCEL * throttle;
     const ay = Math.sin(car.angle) * ACCEL * throttle;
     car.vx += ax * dt;
@@ -2128,7 +2164,7 @@ function updateCar(car, dt, input) {
   }
 
   const sp = car.speed;
-  const cap = (car.isPlayer ? MAX_SPEED : AI_MAX) * (car.boostT > 0 ? 1.22 : 1);
+  const cap = MAX_SPEED * (car.boostT > 0 ? 1.22 : 1);
   if (sp > cap) {
     const s = cap / sp;
     car.vx *= s;
@@ -2481,12 +2517,24 @@ document.getElementById("track-import-file")?.addEventListener("change", (e) => 
 });
 document.getElementById("btn-level-edit-track")?.addEventListener("click", () => {
   if (menuSubScreen !== "levels") return;
+  if (LEVELS.some((L) => L.uid === levelSelectUid)) return;
   const rec = findCustomRecord(levelSelectUid);
   if (!rec) return;
+  if (
+    !window.confirm(
+      "Editing changes this layout. Saved top times and your best lap for this track will be cleared. Continue?"
+    )
+  ) {
+    return;
+  }
+  clearSavedRaceTimesForLevelUid(rec.uid);
+  trackCache.delete(rec.uid);
   openTrackEditor(rec, { fromTitle: false });
 });
 document.getElementById("btn-level-delete-track")?.addEventListener("click", () => {
-  if (menuSubScreen !== "levels" || !isCustomTrackUid(levelSelectUid)) return;
+  if (menuSubScreen !== "levels") return;
+  if (LEVELS.some((L) => L.uid === levelSelectUid)) return;
+  if (!isCustomTrackUid(levelSelectUid)) return;
   const L = getLevelDef(levelSelectUid);
   if (!window.confirm(`Delete "${L.name}"? This removes it from your device.`)) return;
   const removed = levelSelectUid;
