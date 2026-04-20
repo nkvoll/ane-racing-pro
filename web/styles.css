@@ -1760,7 +1760,8 @@ body {
   pointer-events: none;
 }
 
-@media (pointer: coarse) and (max-width: 900px) {
+/* Hide pit chat on touch devices OR narrow viewports — do not require both (iOS may report pointer: fine). */
+@media (pointer: coarse), (max-width: 900px) {
   .chat-panel {
     display: none !important;
   }

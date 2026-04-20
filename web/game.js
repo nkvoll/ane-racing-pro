@@ -2529,10 +2529,26 @@ const touchHudHbEl = document.getElementById("touch-hud-handbrake");
 
 function prefersTouchRaceHud() {
   if (gameOptions.forceMobileMode) return true;
+
+  /**
+   * iOS Safari often reports `(pointer: fine)` for the primary pointer even on iPhone; use
+   * `any-pointer: coarse`, touch caps, and UA fallbacks (see WebKit / MQ4 discussions).
+   */
   try {
-    if (matchMedia("(pointer: coarse)").matches) return true;
+    const mq = typeof window !== "undefined" && window.matchMedia;
+    if (mq && mq("(any-pointer: coarse)").matches) return true;
+    if (mq && mq("(pointer: coarse)").matches) return true;
   } catch (_) {}
-  return (navigator.maxTouchPoints ?? 0) > 0;
+
+  const mtp = navigator.maxTouchPoints ?? 0;
+  if (mtp > 0) return true;
+  if (typeof window !== "undefined" && "ontouchstart" in window) return true;
+
+  const ua = navigator.userAgent || "";
+  if (/\b(iPhone|iPod)\b/i.test(ua)) return true;
+  if (/\biPad\b/i.test(ua) || (navigator.platform === "MacIntel" && mtp > 1)) return true;
+
+  return false;
 }
 
 function resetAllTouchDrive() {
