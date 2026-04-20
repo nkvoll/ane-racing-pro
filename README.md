@@ -4,7 +4,7 @@ Desktop shell for the arcade racer using **Electron**. The game is static files 
 
 ## Prerequisites
 
-- **[Node.js](https://nodejs.org/)** 18+ (includes `npm`)
+- **[Node.js](https://nodejs.org/)** 25.9+ (includes `npm`; repo targets **25.9.0**)
 
 ## Install
 
