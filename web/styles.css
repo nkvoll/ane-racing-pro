@@ -1703,18 +1703,26 @@ body {
 }
 
 .touch-hud-handbrake {
-  padding: 0.28rem 0.55rem;
+  width: 3.1rem;
+  min-width: 44px;
+  min-height: 44px;
+  padding: 0.2rem;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   font-family: inherit;
   font-size: 0.58rem;
   font-weight: 900;
   letter-spacing: 0.12em;
-  border-radius: 8px;
+  border-radius: 12px;
   border: 1px solid rgba(255, 200, 120, 0.45);
   background: rgba(10, 14, 22, 0.78);
   color: #ffe0b2;
   cursor: pointer;
   touch-action: manipulation;
   -webkit-tap-highlight-color: transparent;
+  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.35);
 }
 
 .touch-hud-handbrake:active {

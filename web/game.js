@@ -1535,7 +1535,7 @@ function syncPauseSliderElements() {
 const btnOptionsFullscreenEl = document.getElementById("btn-options-fullscreen");
 
 async function syncFullscreenButtonLabels() {
-  let fs = !!document.fullscreenElement;
+  let fs = !!getFullscreenElementCompat();
   if (window.electronShell?.getFullscreen) {
     try {
       fs = await window.electronShell.getFullscreen();
@@ -2009,16 +2009,64 @@ function exitGame() {
   window.close();
 }
 
+/** Not all mobile browsers expose usable page fullscreen (iPhone Safari is limited vs desktop). */
+function isPageFullscreenApiAvailable() {
+  if (window.electronShell?.toggleFullscreen) return true;
+  const root = document.documentElement;
+  return (
+    typeof root.requestFullscreen === "function" ||
+    typeof /** @type {HTMLElement & { webkitRequestFullscreen?: () => unknown }} */ (root)
+      .webkitRequestFullscreen === "function"
+  );
+}
+
+function getFullscreenElementCompat() {
+  const d = document;
+  return (
+    d.fullscreenElement ||
+    /** @type {Document & { webkitFullscreenElement?: Element | null }} */ (d).webkitFullscreenElement ||
+    null
+  );
+}
+
+function requestFullscreenCompat() {
+  const root = /** @type {HTMLElement & { webkitRequestFullscreen?: () => Promise<void> }} */ (
+    document.documentElement
+  );
+  if (typeof root.requestFullscreen === "function") return root.requestFullscreen();
+  if (typeof root.webkitRequestFullscreen === "function") return root.webkitRequestFullscreen();
+  return Promise.reject(new Error("Fullscreen API not available"));
+}
+
+function exitFullscreenCompat() {
+  const d = /** @type {Document & { webkitExitFullscreen?: () => Promise<void> }} */ (document);
+  if (typeof document.exitFullscreen === "function") return document.exitFullscreen();
+  if (typeof d.webkitExitFullscreen === "function") return d.webkitExitFullscreen();
+  return Promise.reject(new Error("Exit fullscreen not available"));
+}
+
+function syncFullscreenMenuButtonVisibility() {
+  const btn = document.getElementById("btn-options-fullscreen");
+  if (!btn) return;
+  btn.classList.toggle("hidden", !isPageFullscreenApiAvailable());
+}
+
 function toggleFullscreenGame() {
   if (window.electronShell?.toggleFullscreen) {
     void window.electronShell.toggleFullscreen();
     setTimeout(() => void syncFullscreenButtonLabels(), 150);
     return;
   }
-  if (document.fullscreenElement) {
-    void document.exitFullscreen?.()?.then(() => syncFullscreenButtonLabels());
+  if (getFullscreenElementCompat()) {
+    void exitFullscreenCompat().then(
+      () => syncFullscreenButtonLabels(),
+      () => syncFullscreenButtonLabels()
+    );
   } else {
-    void document.documentElement.requestFullscreen?.()?.then(() => syncFullscreenButtonLabels());
+    void requestFullscreenCompat().then(
+      () => syncFullscreenButtonLabels(),
+      () => syncFullscreenButtonLabels()
+    );
   }
 }
 
@@ -2553,13 +2601,21 @@ function prefersTouchRaceHud() {
 
 const PORTRAIT_HINT_DISMISS_KEY = "aneRacingPortraitHintDismiss";
 
+/** When true, shows the portrait “rotate to landscape” strip for touch clients. Off for now. */
+const PORTRAIT_ORIENTATION_HINT_ENABLED = false;
+
 /**
  * Banner when a touch‑oriented client is in portrait (landscape plays best).
- * Dismissal is per browser tab session (`sessionStorage`).
+ * Dismissal is per browser tab session (`sessionStorage`) when enabled.
  */
 function syncPortraitOrientationHint() {
   const el = document.getElementById("portrait-orient-hint");
   if (!el) return;
+  if (!PORTRAIT_ORIENTATION_HINT_ENABLED) {
+    el.classList.add("hidden");
+    el.setAttribute("aria-hidden", "true");
+    return;
+  }
   let dismissed = false;
   try {
     dismissed = sessionStorage.getItem(PORTRAIT_HINT_DISMISS_KEY) === "1";
@@ -3110,6 +3166,7 @@ if (window.electronShell?.onFullscreenChange) {
   window.electronShell.onFullscreenChange(() => void syncFullscreenButtonLabels());
 }
 void syncFullscreenButtonLabels();
+syncFullscreenMenuButtonVisibility();
 
 populateLevelSelectList();
 initPickups();

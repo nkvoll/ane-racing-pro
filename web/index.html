@@ -7,7 +7,23 @@
       content="width=device-width, initial-scale=1.0, viewport-fit=cover"
     />
     <title>Ane Racing PRO</title>
-    <link rel="stylesheet" href="styles.css" />
+    <link rel="manifest" href="manifest.webmanifest" />
+    <meta name="theme-color" content="#0a0c10" />
+    <meta name="application-name" content="Ane Racing PRO" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-title" content="Ane Racing" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <link rel="apple-touch-icon" href="icons/apple-touch-icon.png" />
+    <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png" />
+    <script>
+      (function () {
+        var link = document.createElement("link");
+        link.rel = "stylesheet";
+        link.href = "styles.css?v=" + Date.now();
+        document.head.appendChild(link);
+      })();
+    </script>
   </head>
   <body>
     <div id="viewport">
@@ -115,6 +131,14 @@
         <div class="touch-hud-weapons" aria-hidden="true">
           <button
             type="button"
+            id="touch-hud-handbrake"
+            class="touch-hud-handbrake"
+            title="Handbrake"
+          >
+            HB
+          </button>
+          <button
+            type="button"
             id="touch-weapon-cannon"
             class="touch-weapon touch-weapon--cannon"
             aria-label="Plasma cannon"
@@ -139,14 +163,6 @@
           </button>
         </div>
         <div class="touch-hud-steer">
-          <button
-            type="button"
-            id="touch-hud-handbrake"
-            class="touch-hud-handbrake"
-            title="Handbrake"
-          >
-            HB
-          </button>
           <div class="touch-joystick" aria-hidden="true">
             <div class="touch-joystick-base" id="touch-joystick-base">
               <div class="touch-joystick-knob" id="touch-joystick-knob"></div>
@@ -454,6 +470,13 @@
         </button>
       </div>
     </div>
-    <script type="module" src="game.js"></script>
+    <script>
+      (function () {
+        var s = document.createElement("script");
+        s.type = "module";
+        s.src = "game.js?v=" + Date.now();
+        document.body.appendChild(s);
+      })();
+    </script>
   </body>
 </html>
