@@ -5,6 +5,7 @@
   "main": "electron/main.cjs",
   "private": true,
   "author": "Ane Racing contributors",
+  "email": "njal@karevoll.no",
   "license": "MIT",
   "engines": {
     "node": ">=25.9.0"
