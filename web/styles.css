@@ -1342,13 +1342,6 @@ body {
   cursor: pointer;
 }
 
-.menu-options-hint {
-  margin: 0.65rem 0 0;
-  font-size: 0.72rem;
-  line-height: 1.45;
-  color: var(--muted);
-}
-
 .menu-instructions-title {
   margin: 0 0 0.65rem;
   font-size: 1.2rem;

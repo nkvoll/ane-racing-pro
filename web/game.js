@@ -2053,6 +2053,14 @@ function syncFullscreenMenuButtonVisibility() {
   btn.classList.toggle("hidden", !isPageFullscreenApiAvailable());
 }
 
+function syncExitGameButtonVisibility() {
+  const btn = document.getElementById("btn-title-exit");
+  if (!btn) return;
+  const electron = typeof window !== "undefined" && !!window.electronShell?.quit;
+  btn.hidden = !electron;
+  btn.setAttribute("aria-hidden", electron ? "false" : "true");
+}
+
 function toggleFullscreenGame() {
   if (window.electronShell?.toggleFullscreen) {
     void window.electronShell.toggleFullscreen();
@@ -3169,6 +3177,7 @@ if (window.electronShell?.onFullscreenChange) {
 }
 void syncFullscreenButtonLabels();
 syncFullscreenMenuButtonVisibility();
+syncExitGameButtonVisibility();
 
 populateLevelSelectList();
 initPickups();
