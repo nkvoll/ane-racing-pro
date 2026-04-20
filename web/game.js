@@ -84,7 +84,7 @@ class Track {
     this.roadOutline = g.roadOutline;
     this.wallSegments = g.wallSegments;
     this.finishLine = g.finishLine;
-    this.midCheckpoint = g.midCheckpoint;
+    this.checkpoints = g.checkpoints;
     this.length = g.length;
   }
 
@@ -205,7 +205,12 @@ class Car {
     this.wreckT = 0;
     this.displayName = isPlayer ? "You" : "Rival";
     this.raceLap = 1;
-    this.passedMid = false;
+    /** Next checkpoint index to clear (0 … checkpoints.length); equals length ⇒ eligible to complete lap at S/F. */
+    this.nextCheckpointIndex = 0;
+    /** Stable place score: last polyline segment used for projecting (x,y) onto the racing line. */
+    this.trackSegHint = -1;
+    /** Previous arc length [0,L) for resolving closest-segment ambiguity at self-overlaps. */
+    this.lastArcPlace = null;
     this.prevX = x;
     this.prevY = y;
   }
@@ -353,12 +358,24 @@ function fillLeaderboardList(listEl, highlightTs, dataOverride = null) {
 const canvas = document.getElementById("game");
 const ctx = canvas.getContext("2d");
 
-/** Arc length from center[0] along the racing line to the closest point on the polyline (for position). */
-function distanceAlongTrack(x, y) {
+function arcDeltaWrap(a, b, L) {
+  if (a == null || b == null || !Number.isFinite(L) || L < 1e-6) return Infinity;
+  const d = Math.abs(a - b);
+  return Math.min(d, L - d);
+}
+
+/**
+ * Arc length from center[0] along the racing line, with continuity so place doesn't flicker
+ * on self-overlaps when several segments are almost equally close.
+ */
+function distanceAlongTrackForCar(car) {
+  const x = car.x;
+  const y = car.y;
   const n = track.n;
+  const L = track.length;
   let acc = 0;
-  let bestD = Infinity;
-  let bestArc = 0;
+  /** @type {{ d: number, arc: number, seg: number }[]} */
+  const cands = [];
   for (let i = 0; i < n; i++) {
     const j = (i + 1) % n;
     const ax = track.center[i].x;
@@ -372,29 +389,72 @@ function distanceAlongTrack(x, y) {
     const apy = y - ay;
     const t =
       segLen > 1e-9 ? clamp((apx * abx + apy * aby) / (segLen * segLen), 0, 1) : 0;
+    const arc = acc + t * segLen;
     const qx = ax + abx * t;
     const qy = ay + aby * t;
     const d = hypot(x - qx, y - qy);
-    const arc = acc + t * segLen;
-    if (d < bestD) {
-      bestD = d;
-      bestArc = arc;
-    }
+    cands.push({ d, arc, seg: i });
     acc += segLen;
   }
-  return bestArc;
+
+  let bestD = Infinity;
+  for (const c of cands) {
+    bestD = Math.min(bestD, c.d);
+  }
+
+  const STICKY_DIST = 26;
+  const TIE_DIST = 10;
+  const hint = car.trackSegHint;
+
+  if (hint >= 0 && hint < n && cands[hint].d <= bestD + STICKY_DIST) {
+    const chosen = cands[hint];
+    car.trackSegHint = chosen.seg;
+    car.lastArcPlace = chosen.arc;
+    return chosen.arc;
+  }
+
+  let pool = cands.filter((c) => c.d <= bestD + TIE_DIST);
+  if (pool.length > 1 && car.lastArcPlace != null) {
+    pool = [...pool].sort(
+      (a, b) =>
+        arcDeltaWrap(a.arc, car.lastArcPlace, L) -
+        arcDeltaWrap(b.arc, car.lastArcPlace, L)
+    );
+  } else {
+    pool.sort((a, b) => a.d - b.d);
+  }
+
+  const chosen = pool[0];
+  car.trackSegHint = chosen.seg;
+  car.lastArcPlace = chosen.arc;
+  return chosen.arc;
 }
 
-function raceScore(car) {
-  const arc = distanceAlongTrack(car.x, car.y);
-  const base = (car.raceLap - 1) * track.length + arc;
-  return car.wrecked ? base - 1e12 : base;
+/**
+ * Lap / checkpoint / arc as separate axes — never combine into one float (cp*L dominated arc and warped order).
+ * Wrecked cars rank last.
+ */
+function raceProgressComparable(car) {
+  if (car.wrecked) {
+    return { lap: -1, cp: -1, arc: -1 };
+  }
+  const K = track.checkpoints?.length ?? 0;
+  const cp = K > 0 ? car.nextCheckpointIndex : 0;
+  const arc = distanceAlongTrackForCar(car);
+  return { lap: car.raceLap, cp, arc };
 }
 
 function computePlayerPlace() {
-  const ranked = cars.map((c) => ({ c, s: raceScore(c) }));
-  ranked.sort((a, b) => b.s - a.s);
-  const idx = ranked.findIndex((x) => x.c === player);
+  const ranked = cars.map((c) => ({ c, p: raceProgressComparable(c) }));
+  const K = track.checkpoints?.length ?? 0;
+  ranked.sort((x, y) => {
+    const pa = x.p;
+    const pb = y.p;
+    if (pa.lap !== pb.lap) return pb.lap - pa.lap;
+    if (K > 0 && pa.cp !== pb.cp) return pb.cp - pa.cp;
+    return pb.arc - pa.arc;
+  });
+  const idx = ranked.findIndex((row) => row.c === player);
   return { place: idx + 1, total: cars.length };
 }
 
@@ -849,6 +909,11 @@ function respawnCarOnTrack(car) {
   car.cdCannon = 0.3;
   car.cdMissile = 0.5;
   car.cdMine = 0.5;
+  // Lap / CP rays use prev→curr; without this, one frame uses wreck pos→new pos and can cross S/F or CPs falsely.
+  car.prevX = car.x;
+  car.prevY = car.y;
+  car.trackSegHint = -1;
+  car.lastArcPlace = null;
 }
 
 function spawnParticles(x, y, n, color, spread = 120) {
@@ -2158,6 +2223,7 @@ function updateCar(car, dt, input) {
 }
 
 function checkCarLap(car, prev, curr) {
+  if (car.wrecked) return;
   const fl = track.finishLine;
   // Only the finite S/F segment counts — not the infinite line through it (else false laps elsewhere).
   if (segmentIntersect(prev, curr, fl.a, fl.b) == null) return;
@@ -2167,9 +2233,10 @@ function checkCarLap(car, prev, curr) {
   const forward = vx * fl.tangent.x + vy * fl.tangent.y;
   if (forward <= 0) return;
 
-  if (!car.passedMid) return;
+  const cps = track.checkpoints || [];
+  if (cps.length > 0 && car.nextCheckpointIndex < cps.length) return;
 
-  car.passedMid = false;
+  if (cps.length > 0) car.nextCheckpointIndex = 0;
   car.raceLap += 1;
 
   if (!car.isPlayer) {
@@ -2350,7 +2417,9 @@ function prepareGridForRaceStart() {
     c.cdMine = 0;
     c.wreckT = 0;
     c.raceLap = 1;
-    c.passedMid = false;
+    c.nextCheckpointIndex = 0;
+    c.trackSegHint = -1;
+    c.lastArcPlace = null;
     c.prevX = c.x;
     c.prevY = c.y;
   }
@@ -2632,20 +2701,25 @@ function drawWorld() {
   ctx.stroke();
   ctx.setLineDash([]);
 
-  // Kerbs (every 4th outer segment) — skip near sector so red/white rumble doesn't read as a barrier
-  const midK = track.midCheckpoint;
+  // Kerbs (every 4th outer segment) — skip near checkpoints so rumble doesn't read as a barrier
   const outerEdge = ro.outer;
   const nEdge = outerEdge.length;
+  const cps = track.checkpoints || [];
   for (let i = 0; i < nEdge; i += 4) {
     const j = (i + 1) % nEdge;
     const o0 = outerEdge[i];
     const o1 = outerEdge[j];
-    if (
-      distPointSegment(midK.x, midK.y, o0.x, o0.y, o1.x, o1.y) <
-      midK.r + track.width * 0.55
-    ) {
-      continue;
+    let nearCp = false;
+    for (const cp of cps) {
+      if (
+        distPointSegment(cp.x, cp.y, o0.x, o0.y, o1.x, o1.y) <
+        cp.r + track.width * 0.55
+      ) {
+        nearCp = true;
+        break;
+      }
     }
+    if (nearCp) continue;
     const gr = i % 8 === 0 ? "#c62828" : "#f5f5f5";
     ctx.strokeStyle = gr;
     ctx.lineWidth = 8 / z;
@@ -2972,10 +3046,16 @@ function frame(now) {
       spawnBoostParticles(car, dt);
     }
 
-    const m = track.midCheckpoint;
+    const cps = track.checkpoints || [];
     for (const car of cars) {
-      if (hypot(car.x - m.x, car.y - m.y) < m.r) {
-        car.passedMid = true;
+      if (car.wrecked) continue;
+      const idx = car.nextCheckpointIndex;
+      if (idx >= cps.length) continue;
+      const cp = cps[idx];
+      const d = hypot(car.x - cp.x, car.y - cp.y);
+      const dprev = hypot(car.prevX - cp.x, car.prevY - cp.y);
+      if (d < cp.r && dprev >= cp.r) {
+        car.nextCheckpointIndex++;
       }
     }
 

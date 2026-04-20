@@ -875,40 +875,6 @@ body {
   text-align: center;
 }
 
-.track-editor-lede {
-  margin: 0 0 0.75rem;
-  font-size: 0.72rem;
-  line-height: 1.45;
-  color: var(--muted);
-  font-weight: 500;
-  text-align: center;
-  max-width: 52rem;
-  margin-left: auto;
-  margin-right: auto;
-}
-
-.track-editor-min-points-notice {
-  margin: 0 0 0.45rem;
-  padding: 0.45rem 0.65rem;
-  font-size: 0.7rem;
-  line-height: 1.4;
-  color: var(--muted);
-  text-align: center;
-  border: 1px solid rgba(255, 213, 79, 0.28);
-  border-radius: 4px;
-  background: rgba(255, 213, 79, 0.06);
-}
-
-.track-editor-min-points-notice.hidden {
-  visibility: hidden;
-  /* keep layout height so the panel does not jump when 4 points are placed / sketch is drawn */
-}
-
-.track-editor-min-points-notice strong {
-  color: var(--gold);
-  font-weight: 600;
-}
-
 .track-editor-shell {
   display: flex;
   flex-direction: column;

@@ -151,16 +151,6 @@ export function initTrackEditor(opts) {
     return points.length > 2;
   }
 
-  const minPointsNoticeEl = document.getElementById("track-editor-min-points-notice");
-
-  function syncMinPointsNotice() {
-    if (!minPointsNoticeEl) return;
-    const needMore = points.length < 4;
-    minPointsNoticeEl.classList.toggle("hidden", !needMore);
-    if (needMore) minPointsNoticeEl.removeAttribute("aria-hidden");
-    else minPointsNoticeEl.setAttribute("aria-hidden", "true");
-  }
-
   function syncDeletePointButton() {
     const btn = document.getElementById("track-editor-delete-point");
     if (!btn) return;
@@ -393,15 +383,6 @@ export function initTrackEditor(opts) {
       ctx.lineTo(fl.b.x, fl.b.y);
       ctx.stroke();
 
-      const mc = mesh.midCheckpoint;
-      ctx.strokeStyle = "rgba(255, 152, 67, 0.45)";
-      ctx.lineWidth = 2 / z;
-      ctx.setLineDash([8 / z, 6 / z]);
-      ctx.beginPath();
-      ctx.arc(mc.x, mc.y, mc.r, 0, Math.PI * 2);
-      ctx.stroke();
-      ctx.setLineDash([]);
-
       ctx.setLineDash([5 / z, 5 / z]);
       ctx.strokeStyle = "rgba(0, 229, 255, 0.4)";
       ctx.lineWidth = 1.75 / z;
@@ -451,7 +432,6 @@ export function initTrackEditor(opts) {
     }
 
     ctx.restore();
-    syncMinPointsNotice();
     syncDeletePointButton();
   }
 

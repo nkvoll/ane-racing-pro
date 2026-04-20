@@ -753,38 +753,13 @@ export function buildTrackLayout(control, opts = {}) {
   };
 
   let acc = 0;
-  const cumLen = [];
   for (let i = 0; i < n; i++) {
-    cumLen.push(acc);
     const j = (i + 1) % n;
     acc += hypotXY(center[j].x - center[i].x, center[j].y - center[i].y);
   }
   const length = acc;
-  const L = length;
-  const lo = L * 0.38;
-  const hi = L * 0.62;
-  let bestMidI = Math.floor(n * 0.5) % n;
-  let bestClear = -1;
-  for (let i = 0; i < n; i++) {
-    const s = cumLen[i];
-    if (s < lo || s > hi) continue;
-    const px = center[i].x;
-    const py = center[i].y;
-    let dmin = Infinity;
-    for (const seg of wallSegments) {
-      dmin = Math.min(dmin, distPointSegment(px, py, seg.a.x, seg.a.y, seg.b.x, seg.b.y));
-    }
-    if (dmin > bestClear) {
-      bestClear = dmin;
-      bestMidI = i;
-    }
-  }
 
-  const midCheckpoint = {
-    x: center[bestMidI].x,
-    y: center[bestMidI].y,
-    r: width * 1.2,
-  };
+  const checkpoints = checkpointsFromControlPolygon(control, center, width);
 
   return {
     center,
@@ -795,9 +770,66 @@ export function buildTrackLayout(control, opts = {}) {
     width,
     wallSegments,
     finishLine,
-    midCheckpoint,
+    checkpoints,
     length,
   };
+}
+
+/** Closest point on a closed polyline and arc length from `pts[0]` along forward traversal. */
+function closestPointOnClosedPolyline(px, py, pts) {
+  const n = pts.length;
+  if (n < 2) return { x: px, y: py, s: 0 };
+  let bestD = Infinity;
+  let best = { x: pts[0].x, y: pts[0].y, s: 0 };
+  for (let i = 0; i < n; i++) {
+    const j = (i + 1) % n;
+    const ax = pts[i].x;
+    const ay = pts[i].y;
+    const bx = pts[j].x;
+    const by = pts[j].y;
+    const dx = bx - ax;
+    const dy = by - ay;
+    const len2 = dx * dx + dy * dy;
+    const len = Math.sqrt(len2) || 1;
+    let t = len2 > 1e-20 ? ((px - ax) * dx + (py - ay) * dy) / len2 : 0;
+    t = clamp(t, 0, 1);
+    const qx = ax + t * dx;
+    const qy = ay + t * dy;
+    const d = hypotXY(px - qx, py - qy);
+    if (d < bestD) {
+      let acc = 0;
+      for (let k = 0; k < i; k++) {
+        const p0 = pts[k];
+        const p1 = pts[(k + 1) % n];
+        acc += hypotXY(p1.x - p0.x, p1.y - p0.y);
+      }
+      const s = acc + t * len;
+      bestD = d;
+      best = { x: qx, y: qy, s };
+    }
+  }
+  return best;
+}
+
+/**
+ * One drivethrough disk per control vertex, projected onto the smoothed centerline, in track order.
+ */
+function checkpointsFromControlPolygon(control, center, width) {
+  const r = width * 1.2;
+  const scored = [];
+  const seen = new Set();
+  for (const p of control) {
+    const hit = closestPointOnClosedPolyline(p.x, p.y, center);
+    const key = `${Math.round(hit.x * 4)},${Math.round(hit.y * 4)}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    scored.push({ x: hit.x, y: hit.y, s: hit.s });
+  }
+  scored.sort((a, b) => a.s - b.s);
+  if (scored.length === 0) {
+    return [{ x: center[0].x, y: center[0].y, r }];
+  }
+  return scored.map(({ x, y }) => ({ x, y, r }));
 }
 
 /** Axis-aligned bounds of `roadOutline` (outer + holes), for gradients / view fitting. */
