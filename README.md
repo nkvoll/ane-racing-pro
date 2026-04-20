@@ -28,6 +28,10 @@ This launches the Electron window with the game. Optional: open DevTools by sett
 ELECTRON_OPEN_DEVTOOLS=1 npm start
 ```
 
+## In-game menu
+
+On launch you get the main menu (**New game**, **Audio** for SFX/music, **Fullscreen** becomes **Exit fullscreen** while the window is fullscreen, **Exit game**). During a race or the pre-race **3–2–1** countdown, **Esc** or **P** opens the pause menu. **Restart race** moves everyone to the grid first, then runs **3–2–1–GO** (same order as **New game**). **Space** on the main menu starts a race; with the menu open, **Space** resumes after **3–2–1–GO**, or **Back** from the Audio screen. Clicking the dimmed backdrop returns from Audio or resumes from pause (not on the title screen).
+
 ## Production build (installers / artifacts)
 
 Uses [electron-builder](https://www.electron.build/) (configured in `package.json` under `"build"`).

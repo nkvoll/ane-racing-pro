@@ -295,6 +295,83 @@ function formatTime(sec) {
   return `${m}:${whole.toString().padStart(2, "0")}.${frac.toString().padStart(2, "0")}`;
 }
 
+const LEADERBOARD_KEY = "aneRacingTop10RaceTimes";
+const LEADERBOARD_MAX = 10;
+
+function parseLeaderboard() {
+  try {
+    const raw = localStorage.getItem(LEADERBOARD_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [];
+    return parsed
+      .filter(
+        (x) =>
+          x &&
+          typeof x.time === "number" &&
+          Number.isFinite(x.time) &&
+          x.time > 0
+      )
+      .sort(
+        (a, b) =>
+          a.time - b.time || (a.ts || 0) - (b.ts || 0)
+      )
+      .slice(0, LEADERBOARD_MAX);
+  } catch {
+    return [];
+  }
+}
+
+/** Saves this race finish; returns 1–10 if it made the top {LEADERBOARD_MAX} saved races, else null. */
+function recordRaceFinishTime(totalSec) {
+  if (!Number.isFinite(totalSec) || totalSec <= 0) {
+    renderLeaderboard();
+    return { rank: null };
+  }
+  const rows = [...parseLeaderboard()];
+  const ts = Date.now();
+  rows.push({ time: totalSec, ts });
+  rows.sort(
+    (a, b) => a.time - b.time || (a.ts || 0) - (b.ts || 0)
+  );
+  const next = rows.slice(0, LEADERBOARD_MAX);
+  localStorage.setItem(LEADERBOARD_KEY, JSON.stringify(next));
+  const idx = next.findIndex((r) => r.ts === ts);
+  const rank = idx >= 0 ? idx + 1 : null;
+  renderLeaderboard();
+  return { rank };
+}
+
+function renderLeaderboard() {
+  const lists = [
+    document.getElementById("leaderboard-list-title"),
+    document.getElementById("leaderboard-list-finish"),
+  ].filter(Boolean);
+  const data = parseLeaderboard();
+  for (const list of lists) {
+    list.innerHTML = "";
+    if (data.length === 0) {
+      const li = document.createElement("li");
+      li.className = "leaderboard-empty";
+      li.textContent = "No races saved yet — finish one!";
+      list.appendChild(li);
+      continue;
+    }
+    data.forEach((row, i) => {
+      const li = document.createElement("li");
+      const rank = document.createElement("span");
+      rank.className = "lb-rank";
+      rank.textContent = `${i + 1}.`;
+      const timeEl = document.createElement("span");
+      timeEl.className = "lb-time";
+      timeEl.textContent = formatTime(row.time);
+      li.appendChild(rank);
+      li.appendChild(timeEl);
+      list.appendChild(li);
+    });
+  }
+}
+
 const canvas = document.getElementById("game");
 const ctx = canvas.getContext("2d");
 
@@ -1151,21 +1228,32 @@ const state = {
     : null,
   prevPos: { x: player.x, y: player.y },
   camera: { x: 0, y: 0, zoom: 1 },
-  pendingRestart: false,
+  /** Main menu or pause overlay is visible */
+  menuOpen: false,
+  /** "title" | "race" | "countdown" — which panel / resume behavior */
+  menuContext: "title",
   paused: false,
 };
+
+let preRaceCountdownIntervalId = null;
+let preRaceCountdownTimeoutId = null;
+let resumeCountdownIntervalId = null;
+let resumeCountdownTimeoutId = null;
+/** "main" | "audio" — nested Audio screen in game menu */
+let menuSubScreen = "main";
 
 const overlay = document.getElementById("overlay");
 const overlayTitle = document.getElementById("overlay-title");
 const overlaySub = document.getElementById("overlay-sub");
 const overlayHintEl = document.getElementById("overlay-hint");
+const overlayFinishRankEl = document.getElementById("overlay-finish-rank");
+const overlayLeaderboardEl = document.getElementById("overlay-leaderboard");
 const countdownEl = document.getElementById("countdown");
 const lapDisplay = document.getElementById("lap-display");
 const currentTimeEl = document.getElementById("current-time");
 const lastLapEl = document.getElementById("last-lap");
 const bestLapEl = document.getElementById("best-lap");
 const placeDisplayEl = document.getElementById("place-display");
-const restartPromptEl = document.getElementById("restart-prompt");
 const hpBarEl = document.getElementById("hp-bar");
 const hpTextEl = document.getElementById("hp-text");
 const shieldTextEl = document.getElementById("shield-text");
@@ -1178,15 +1266,15 @@ const pickupToastEl = document.getElementById("pickup-toast");
 const pickupToastTitleEl = document.getElementById("pickup-toast-title");
 const pickupToastDescEl = document.getElementById("pickup-toast-desc");
 const viewportEl = document.getElementById("viewport");
-const pauseOverlayEl = document.getElementById("pause-overlay");
+const gameMenuOverlayEl = document.getElementById("game-menu-overlay");
 const sfxVolumeEl = document.getElementById("sfx-volume");
 const musicVolumeEl = document.getElementById("music-volume");
 
 /**
  * Some embedded WebViews ignore stacking for GPU-backed <canvas>; inline
- * setProperty(..., 'important') keeps the pause layer above the game when needed.
+ * setProperty(..., 'important') keeps the menu layer above the game when needed.
  */
-function applyPauseOverlayForWebView(el) {
+function applyGameMenuOverlay(el) {
   if (!el) return;
   if (el.parentElement !== document.body) {
     document.body.appendChild(el);
@@ -1218,7 +1306,7 @@ function applyPauseOverlayForWebView(el) {
   el.style.setProperty("transform", "translateZ(0)", I);
 }
 
-function hidePauseOverlayForWebView(el) {
+function hideGameMenuOverlay(el) {
   if (!el) return;
   el.classList.add("hidden");
   el.setAttribute("aria-hidden", "true");
@@ -1230,32 +1318,216 @@ function syncPauseSliderElements() {
   if (musicVolumeEl) musicVolumeEl.value = String(Math.round(audio.getMusicVolume() * 100));
 }
 
-function openPause() {
-  if (state.mode !== "race" || state.pendingRestart) return;
-  state.paused = true;
+const btnTitleFullscreenEl = document.getElementById("btn-title-fullscreen");
+const btnPauseFullscreenEl = document.getElementById("btn-pause-fullscreen");
+
+async function syncFullscreenButtonLabels() {
+  let fs = !!document.fullscreenElement;
+  if (window.electronShell?.getFullscreen) {
+    try {
+      fs = await window.electronShell.getFullscreen();
+    } catch (_) {}
+  }
+  const label = fs ? "Exit fullscreen" : "Fullscreen";
+  if (btnTitleFullscreenEl) btnTitleFullscreenEl.textContent = label;
+  if (btnPauseFullscreenEl) btnPauseFullscreenEl.textContent = label;
+}
+
+function updateGameMenuPanels() {
+  const titlePanel = document.getElementById("menu-panel-title");
+  const pausePanel = document.getElementById("menu-panel-pause");
+  const audioPanel = document.getElementById("menu-panel-audio");
+  if (!titlePanel || !pausePanel || !audioPanel) return;
+  const showTitle =
+    state.mode === "title" && state.menuContext === "title" && state.menuOpen;
+
+  if (menuSubScreen === "audio") {
+    audioPanel.classList.remove("hidden");
+    titlePanel.classList.add("hidden");
+    pausePanel.classList.add("hidden");
+    return;
+  }
+
+  audioPanel.classList.add("hidden");
+  titlePanel.classList.toggle("hidden", !showTitle);
+  pausePanel.classList.toggle("hidden", showTitle);
+}
+
+function hideAudioSubmenu() {
+  menuSubScreen = "main";
+  updateGameMenuPanels();
+}
+
+function showAudioSubmenu() {
+  menuSubScreen = "audio";
+  syncPauseSliderElements();
+  updateGameMenuPanels();
+}
+
+function clearPreRaceCountdown() {
+  if (preRaceCountdownIntervalId != null) {
+    clearInterval(preRaceCountdownIntervalId);
+    preRaceCountdownIntervalId = null;
+  }
+  if (preRaceCountdownTimeoutId != null) {
+    clearTimeout(preRaceCountdownTimeoutId);
+    preRaceCountdownTimeoutId = null;
+  }
+}
+
+function clearResumeRaceCountdown() {
+  if (resumeCountdownIntervalId != null) {
+    clearInterval(resumeCountdownIntervalId);
+    resumeCountdownIntervalId = null;
+  }
+  if (resumeCountdownTimeoutId != null) {
+    clearTimeout(resumeCountdownTimeoutId);
+    resumeCountdownTimeoutId = null;
+  }
+}
+
+/** 3–2–1–GO before resuming the race after pausing mid-session */
+function startResumeRaceCountdown(afterGo) {
+  clearResumeRaceCountdown();
+  countdownEl.classList.remove("hidden");
+  const labels = ["3", "2", "1", "GO"];
+  let step = 0;
+  countdownEl.textContent = labels[0];
+  resumeCountdownIntervalId = window.setInterval(() => {
+    step += 1;
+    if (step < labels.length) {
+      countdownEl.textContent = labels[step];
+    } else {
+      clearInterval(resumeCountdownIntervalId);
+      resumeCountdownIntervalId = null;
+      resumeCountdownTimeoutId = window.setTimeout(() => {
+        resumeCountdownTimeoutId = null;
+        countdownEl.classList.add("hidden");
+        afterGo();
+      }, 420);
+    }
+  }, 820);
+}
+
+function showTitleMenu() {
+  menuSubScreen = "main";
+  clearPreRaceCountdown();
+  clearResumeRaceCountdown();
+  countdownEl.classList.add("hidden");
+  state.mode = "title";
+  state.menuContext = "title";
+  state.menuOpen = true;
+  state.paused = false;
+  showOverlay("", "", false, "");
+  updateGameMenuPanels();
+  viewportEl?.classList.remove("race-paused");
   keys.up = keys.down = keys.left = keys.right = keys.handbrake = false;
-  viewportEl?.classList.add("race-paused");
-  if (pauseOverlayEl) {
-    applyPauseOverlayForWebView(pauseOverlayEl);
+  if (gameMenuOverlayEl) {
+    applyGameMenuOverlay(gameMenuOverlayEl);
     syncPauseSliderElements();
-    /* Layout pass: WKWebView sometimes skips painting range controls until after reflow. */
     requestAnimationFrame(() => {
       requestAnimationFrame(() => {
         syncPauseSliderElements();
-        if (pauseOverlayEl) void pauseOverlayEl.offsetHeight;
+        if (gameMenuOverlayEl) void gameMenuOverlayEl.offsetHeight;
+      });
+    });
+  }
+  renderLeaderboard();
+}
+
+function openRaceOrCountdownMenu() {
+  menuSubScreen = "main";
+  if (state.mode === "race") {
+    state.menuContext = "race";
+    state.paused = true;
+    keys.up = keys.down = keys.left = keys.right = keys.handbrake = false;
+  } else if (state.mode === "countdown") {
+    clearPreRaceCountdown();
+    countdownEl.classList.add("hidden");
+    state.menuContext = "countdown";
+  } else {
+    return;
+  }
+  state.menuOpen = true;
+  viewportEl?.classList.add("race-paused");
+  updateGameMenuPanels();
+  if (gameMenuOverlayEl) {
+    applyGameMenuOverlay(gameMenuOverlayEl);
+    syncPauseSliderElements();
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        syncPauseSliderElements();
+        if (gameMenuOverlayEl) void gameMenuOverlayEl.offsetHeight;
       });
     });
   }
 }
 
-function resumeFromPause() {
-  if (!state.paused) return;
-  state.paused = false;
-  viewportEl?.classList.remove("race-paused");
-  if (pauseOverlayEl) hidePauseOverlayForWebView(pauseOverlayEl);
+function resumeFromGameMenu() {
+  if (!state.menuOpen) return;
+  menuSubScreen = "main";
+  const ctx = state.menuContext;
+  hideGameMenuOverlay(gameMenuOverlayEl);
+  state.menuOpen = false;
+
+  if (ctx === "race") {
+    startResumeRaceCountdown(() => {
+      state.paused = false;
+      viewportEl?.classList.remove("race-paused");
+    });
+  } else if (ctx === "countdown") {
+    startSequence();
+  }
 }
 
-function showOverlay(title, sub, show = true, hint = "") {
+/** Abandon current race / countdown and return to the title screen. */
+function returnToMainMenuFromPause() {
+  if (!state.menuOpen) return;
+  if (state.menuContext !== "race" && state.menuContext !== "countdown") return;
+  menuSubScreen = "main";
+  clearPreRaceCountdown();
+  clearResumeRaceCountdown();
+  countdownEl.classList.add("hidden");
+  prepareGridForRaceStart();
+  showTitleMenu();
+}
+
+function exitGame() {
+  if (window.electronShell?.quit) {
+    window.electronShell.quit();
+    return;
+  }
+  window.close();
+}
+
+function toggleFullscreenGame() {
+  if (window.electronShell?.toggleFullscreen) {
+    void window.electronShell.toggleFullscreen();
+    setTimeout(() => void syncFullscreenButtonLabels(), 150);
+    return;
+  }
+  if (document.fullscreenElement) {
+    void document.exitFullscreen?.()?.then(() => syncFullscreenButtonLabels());
+  } else {
+    void document.documentElement.requestFullscreen?.()?.then(() => syncFullscreenButtonLabels());
+  }
+}
+
+function restartRaceFromMenu() {
+  if (state.mode !== "race") return;
+  menuSubScreen = "main";
+  clearResumeRaceCountdown();
+  prepareGridForRaceStart();
+  hideGameMenuOverlay(gameMenuOverlayEl);
+  state.menuOpen = false;
+  state.paused = true;
+  viewportEl?.classList.add("race-paused");
+  startResumeRaceCountdown(() => {
+    beginRaceFromGrid();
+  });
+}
+
+function showOverlay(title, sub, show = true, hint = "", options = {}) {
   overlayTitle.textContent = title;
   overlaySub.textContent = sub || "";
   overlay.classList.toggle("hidden", !show);
@@ -1263,12 +1535,24 @@ function showOverlay(title, sub, show = true, hint = "") {
     overlayHintEl.textContent = hint;
     overlayHintEl.classList.toggle("hidden", !hint);
   }
-}
-
-function setRestartPrompt(on) {
-  state.pendingRestart = on;
-  if (restartPromptEl) {
-    restartPromptEl.classList.toggle("hidden", !on);
+  if (overlayFinishRankEl) {
+    if (show && options.showLeaderboard && "finishRank" in options) {
+      const r = options.finishRank;
+      overlayFinishRankEl.classList.remove("hidden");
+      if (r != null && r >= 1 && r <= LEADERBOARD_MAX) {
+        overlayFinishRankEl.textContent = `This race: #${r} of your ${LEADERBOARD_MAX} fastest saved races`;
+        overlayFinishRankEl.classList.toggle("finish-rank-podium", r <= 3);
+      } else {
+        overlayFinishRankEl.textContent = `Not among your ${LEADERBOARD_MAX} fastest saved races`;
+        overlayFinishRankEl.classList.remove("finish-rank-podium");
+      }
+    } else {
+      overlayFinishRankEl.classList.add("hidden");
+    }
+  }
+  if (overlayLeaderboardEl) {
+    const showLb = Boolean(show && options.showLeaderboard);
+    overlayLeaderboardEl.classList.toggle("hidden", !showLb);
   }
 }
 
@@ -1474,11 +1758,13 @@ function checkCarLap(car, prev, curr) {
   if (player.raceLap > state.totalLaps) {
     state.mode = "finished";
     const totalTime = now - state.raceStartTime;
+    const { rank } = recordRaceFinishTime(totalTime);
     showOverlay(
       "Finish!",
       `Total time: ${formatTime(totalTime)}\nBest lap: ${formatTime(state.bestLap)}`,
       true,
-      "Space to race again"
+      "Space to race again",
+      { showLeaderboard: true, finishRank: rank }
     );
     try {
       audio.playLap();
@@ -1503,59 +1789,57 @@ window.addEventListener("keydown", (e) => {
   if (e.code === "ArrowRight" || e.code === "KeyD") keys.right = true;
   if (e.code === "ShiftLeft" || e.code === "ShiftRight") keys.handbrake = true;
 
-  if (e.code === "KeyR" && (state.mode === "race" || state.mode === "finished")) {
-    if (state.paused) return;
-    if (!state.pendingRestart) {
-      setRestartPrompt(true);
-    }
-  }
-
-  if (e.code === "Enter" && state.pendingRestart) {
-    e.preventDefault();
-    setRestartPrompt(false);
-    resetRace();
-    return;
-  }
-
   if (e.code === "Escape") {
-    if (state.pendingRestart) {
+    if (state.menuOpen && menuSubScreen === "audio") {
       e.preventDefault();
-      setRestartPrompt(false);
+      hideAudioSubmenu();
       return;
     }
-    if (state.paused) {
+    if (state.menuOpen) {
+      if (state.menuContext === "title") {
+        e.preventDefault();
+        return;
+      }
       e.preventDefault();
-      resumeFromPause();
+      resumeFromGameMenu();
       return;
     }
-    if (state.mode === "race") {
+    if (state.mode === "race" || state.mode === "countdown") {
       e.preventDefault();
-      openPause();
+      openRaceOrCountdownMenu();
       return;
     }
   }
 
   if (e.code === "KeyP" && !e.repeat) {
-    if (state.pendingRestart) return;
-    if (state.mode === "race") {
+    if (state.menuOpen && menuSubScreen === "audio") {
       e.preventDefault();
-      if (state.paused) resumeFromPause();
-      else openPause();
+      hideAudioSubmenu();
+      return;
+    }
+    if (state.mode === "race" || state.mode === "countdown") {
+      e.preventDefault();
+      if (state.menuOpen) resumeFromGameMenu();
+      else openRaceOrCountdownMenu();
       return;
     }
   }
 
   if (e.code === "Space") {
     e.preventDefault();
-    if (state.paused) {
-      resumeFromPause();
+    if (state.menuOpen) {
+      if (menuSubScreen === "audio") {
+        hideAudioSubmenu();
+        return;
+      }
+      if (state.menuContext === "title") {
+        startSequence();
+        return;
+      }
+      resumeFromGameMenu();
       return;
     }
-    if (state.pendingRestart) {
-      setRestartPrompt(false);
-      return;
-    }
-    if (state.mode === "title" || state.mode === "finished") startSequence();
+    if (state.mode === "finished") startSequence();
   }
   if (
     state.mode === "race" &&
@@ -1577,7 +1861,8 @@ window.addEventListener("keyup", (e) => {
   if (e.code === "ShiftLeft" || e.code === "ShiftRight") keys.handbrake = false;
 });
 
-function resetRace() {
+/** Grid positions + world reset; call before pre-race or restart countdown */
+function prepareGridForRaceStart() {
   projectiles.length = 0;
   mines.length = 0;
   particles.length = 0;
@@ -1609,17 +1894,25 @@ function resetRace() {
     c.prevY = c.y;
   }
 
+  state.prevPos.x = player.x;
+  state.prevPos.y = player.y;
+  updateHud();
+}
+
+/** After 3–2–1–GO; starts lap clock and green-flag messaging */
+function beginRaceFromGrid() {
   state.lap = 1;
   state.lastLapTime = null;
   state.lapStartTime = performance.now() / 1000;
   state.raceStartTime = state.lapStartTime;
   state.mode = "race";
   state.paused = false;
+  state.menuOpen = false;
+  state.menuContext = "race";
   showOverlay("", "", false, "");
   countdownEl.classList.add("hidden");
-  setRestartPrompt(false);
   viewportEl?.classList.remove("race-paused");
-  if (pauseOverlayEl) hidePauseOverlayForWebView(pauseOverlayEl);
+  if (gameMenuOverlayEl) hideGameMenuOverlay(gameMenuOverlayEl);
   state.prevPos.x = player.x;
   state.prevPos.y = player.y;
   chatLines.length = 0;
@@ -1630,25 +1923,31 @@ function resetRace() {
 }
 
 function startSequence() {
+  menuSubScreen = "main";
   showOverlay("", "", false, "");
-  setRestartPrompt(false);
+  clearPreRaceCountdown();
+  clearResumeRaceCountdown();
   state.paused = false;
+  state.menuOpen = false;
   viewportEl?.classList.remove("race-paused");
-  if (pauseOverlayEl) hidePauseOverlayForWebView(pauseOverlayEl);
+  if (gameMenuOverlayEl) hideGameMenuOverlay(gameMenuOverlayEl);
+  prepareGridForRaceStart();
   state.mode = "countdown";
   countdownEl.classList.remove("hidden");
   const labels = ["3", "2", "1", "GO"];
   let step = 0;
   countdownEl.textContent = labels[0];
-  const timer = setInterval(() => {
+  preRaceCountdownIntervalId = window.setInterval(() => {
     step += 1;
     if (step < labels.length) {
       countdownEl.textContent = labels[step];
     } else {
-      clearInterval(timer);
-      setTimeout(() => {
+      clearInterval(preRaceCountdownIntervalId);
+      preRaceCountdownIntervalId = null;
+      preRaceCountdownTimeoutId = window.setTimeout(() => {
+        preRaceCountdownTimeoutId = null;
         countdownEl.classList.add("hidden");
-        resetRace();
+        beginRaceFromGrid();
       }, 420);
     }
   }, 820);
@@ -1674,11 +1973,32 @@ if (musicVolumeEl) {
     localStorage.setItem("aneRacingMusicVol", String(v));
   });
 }
-if (pauseOverlayEl) {
-  pauseOverlayEl.addEventListener("click", (e) => {
-    if (e.target === pauseOverlayEl) resumeFromPause();
+if (gameMenuOverlayEl) {
+  gameMenuOverlayEl.addEventListener("click", (e) => {
+    if (e.target !== gameMenuOverlayEl) return;
+    if (menuSubScreen === "audio") {
+      hideAudioSubmenu();
+      return;
+    }
+    if (state.menuContext === "title") return;
+    resumeFromGameMenu();
   });
 }
+
+document.getElementById("btn-new-game")?.addEventListener("click", () => {
+  if (state.mode === "title") startSequence();
+});
+document.getElementById("btn-title-audio")?.addEventListener("click", () => showAudioSubmenu());
+document.getElementById("btn-pause-audio")?.addEventListener("click", () => showAudioSubmenu());
+document.getElementById("btn-audio-back")?.addEventListener("click", () => hideAudioSubmenu());
+document
+  .getElementById("btn-title-fullscreen")
+  ?.addEventListener("click", () => toggleFullscreenGame());
+document.getElementById("btn-pause-fullscreen")?.addEventListener("click", () => toggleFullscreenGame());
+document.getElementById("btn-title-exit")?.addEventListener("click", () => exitGame());
+document.getElementById("btn-pause-main-menu")?.addEventListener("click", () => returnToMainMenuFromPause());
+document.getElementById("btn-resume")?.addEventListener("click", () => resumeFromGameMenu());
+document.getElementById("btn-restart-race")?.addEventListener("click", () => restartRaceFromMenu());
 
 try {
   audio.ensureAudio();
@@ -1695,13 +2015,14 @@ try {
   syncPauseSliderElements();
 } catch (_) {}
 
+document.addEventListener("fullscreenchange", () => void syncFullscreenButtonLabels());
+if (window.electronShell?.onFullscreenChange) {
+  window.electronShell.onFullscreenChange(() => void syncFullscreenButtonLabels());
+}
+void syncFullscreenButtonLabels();
+
 initPickups();
-showOverlay(
-  "Ane Racing PRO",
-  "Audio on first key · F/E/C weapons",
-  true,
-  "Space to start"
-);
+showTitleMenu();
 
 let lastFrame = performance.now();
 
@@ -2083,10 +2404,9 @@ function frame(now) {
     const t = now / 1000;
     state.currentLapTime = t - state.lapStartTime;
     updateHud();
-    try {
-      audio.updateMusic(dt);
-    } catch (_) {}
   } else if (state.mode === "race" && state.paused) {
+    updateHud();
+  } else if (state.mode === "countdown") {
     updateHud();
   } else {
     for (const car of cars) {
@@ -2094,6 +2414,18 @@ function frame(now) {
     }
     updateParticles(dt);
     updateHud();
+  }
+
+  const musicInMenu =
+    state.menuOpen &&
+    (state.menuContext === "title" ||
+      state.menuContext === "race" ||
+      state.menuContext === "countdown");
+  const musicInRace = state.mode === "race" && !state.paused;
+  if (musicInMenu || musicInRace) {
+    try {
+      audio.updateMusic(dt);
+    } catch (_) {}
   }
 
   // Camera follow player
@@ -2104,8 +2436,12 @@ function frame(now) {
   ctx.fillStyle = "#0d1018";
   ctx.fillRect(0, 0, canvas.width, canvas.height);
   drawWorld();
-  /* Subtle dim on the framebuffer if the DOM pause layer is occluded (extra feedback in some WebViews). */
-  if (state.mode === "race" && state.paused) {
+  /* Subtle dim when the race is paused or the race/countdown menu is open */
+  const menuDimCanvas =
+    (state.mode === "race" && state.paused) ||
+    (state.menuOpen &&
+      (state.menuContext === "race" || state.menuContext === "countdown"));
+  if (menuDimCanvas) {
     ctx.save();
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.fillStyle = "rgba(5, 8, 14, 0.22)";

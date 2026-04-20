@@ -24,6 +24,7 @@
     "productName": "Ane Racing PRO",
     "files": [
       "electron/main.cjs",
+      "electron/preload.cjs",
       "web/**/*",
       "package.json"
     ],

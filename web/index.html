@@ -8,7 +8,7 @@
   </head>
   <body>
     <div id="viewport">
-      <!-- Canvas lives in game-stage; pause menu is a body-level fixed layer (see #pause-overlay). -->
+      <!-- Canvas in game-stage; main menu / pause UI is #game-menu-overlay on <body>. -->
       <div id="game-stage" class="game-stage">
         <canvas id="game" width="1280" height="720"></canvas>
       </div>
@@ -20,9 +20,8 @@
         </h1>
         <p class="tagline">
           WASD · <strong>Shift</strong> handbrake · <strong>F</strong> / <strong>E</strong> /
-          <strong>C</strong> weapons · <strong>Esc</strong> / <strong>P</strong> pause ·
-          <strong>R</strong> +
-          <strong>Enter</strong> restart
+          <strong>C</strong> weapons · <strong>Esc</strong> / <strong>P</strong> menu ·
+          <strong>Space</strong> new game / resume
         </p>
       </header>
       <aside class="pickup-legend panel" aria-label="Pickup guide">
@@ -139,55 +138,120 @@
         <div id="chat-log" class="chat-log" aria-live="polite"></div>
       </div>
       <div id="overlay" class="overlay hidden">
-        <div class="card">
+        <div class="card overlay-card">
           <h2 id="overlay-title">Ready</h2>
           <p id="overlay-sub"></p>
+          <p
+            id="overlay-finish-rank"
+            class="finish-rank hidden"
+            role="status"
+            aria-live="polite"
+          ></p>
+          <div
+            id="overlay-leaderboard"
+            class="overlay-leaderboard hidden"
+            aria-label="Top saved races"
+          >
+            <div class="leaderboard-heading">Top 10 races (fastest totals)</div>
+            <ol id="leaderboard-list-finish" class="leaderboard-list"></ol>
+          </div>
           <p id="overlay-hint" class="hint hidden"></p>
         </div>
       </div>
       <div id="countdown" class="countdown hidden"></div>
-      <div id="restart-prompt" class="restart-prompt hidden" role="status">
-        <span class="restart-prompt-inner"
-          >Restart? Press <kbd>Enter</kbd> to confirm ·
-          <kbd>Esc</kbd> or <kbd>Space</kbd> to cancel</span>
-      </div>
       </div>
     </div>
-    <!-- Full-screen fixed layer on <body> (above #viewport / canvas) -->
+    <!-- Full-screen menu (title + pause); above #viewport / canvas -->
     <div
-      id="pause-overlay"
-      class="pause-overlay pause-overlay-root hidden"
+      id="game-menu-overlay"
+      class="game-menu-overlay game-menu-overlay-root hidden"
       aria-hidden="true"
     >
-      <div class="card pause-card">
-        <h2 id="pause-title">Paused</h2>
-        <div class="pause-volume">
-          <label class="volume-label" for="sfx-volume">Sound effects</label>
-          <input
-            id="sfx-volume"
-            type="range"
-            min="0"
-            max="100"
-            value="100"
-            aria-valuemin="0"
-            aria-valuemax="100"
-          />
+      <div class="card pause-card game-menu-card">
+        <div id="menu-panel-audio" class="menu-panel menu-panel-audio hidden">
+          <h2 class="menu-audio-title">Audio</h2>
+          <div class="menu-volume-block" aria-label="Volume">
+            <div class="pause-volume">
+              <label class="volume-label" for="sfx-volume">Sound effects</label>
+              <input
+                id="sfx-volume"
+                type="range"
+                min="0"
+                max="100"
+                value="100"
+                aria-valuemin="0"
+                aria-valuemax="100"
+              />
+            </div>
+            <div class="pause-volume">
+              <label class="volume-label" for="music-volume">Music</label>
+              <input
+                id="music-volume"
+                type="range"
+                min="0"
+                max="100"
+                value="100"
+                aria-valuemin="0"
+                aria-valuemax="100"
+              />
+            </div>
+          </div>
+          <div class="menu-actions">
+            <button type="button" class="menu-btn menu-btn-primary" id="btn-audio-back">
+              Back
+            </button>
+          </div>
         </div>
-        <div class="pause-volume">
-          <label class="volume-label" for="music-volume">Music</label>
-          <input
-            id="music-volume"
-            type="range"
-            min="0"
-            max="100"
-            value="100"
-            aria-valuemin="0"
-            aria-valuemax="100"
-          />
+        <div id="menu-panel-title" class="menu-panel">
+          <div class="menu-title-columns">
+            <div class="menu-title-primary">
+          <h2 class="menu-main-title">Ane Racing PRO</h2>
+          <p class="menu-sub">Audio on first key · F / E / C weapons</p>
+          <div class="menu-actions">
+            <button type="button" class="menu-btn menu-btn-primary" id="btn-new-game">
+              New game
+            </button>
+            <button type="button" class="menu-btn" id="btn-title-audio">
+              Audio
+            </button>
+            <button type="button" class="menu-btn" id="btn-title-fullscreen">
+              Fullscreen
+            </button>
+            <button type="button" class="menu-btn menu-btn-danger" id="btn-title-exit">
+              Exit game
+            </button>
+          </div>
+            </div>
+            <aside class="leaderboard-aside panel" aria-label="Top saved races">
+              <div class="leaderboard-heading">Top 10 races</div>
+              <p class="leaderboard-hint">3-lap totals · saved on this device</p>
+              <ol id="leaderboard-list-title" class="leaderboard-list"></ol>
+            </aside>
+          </div>
         </div>
-        <p id="pause-hint" class="hint">
-          <kbd>Esc</kbd>, <kbd>P</kbd>, or <kbd>Space</kbd> to resume
-        </p>
+        <div id="menu-panel-pause" class="menu-panel hidden">
+          <h2 id="pause-heading">Paused</h2>
+          <div class="menu-actions menu-actions-stack">
+            <button type="button" class="menu-btn menu-btn-primary" id="btn-resume">
+              Resume
+            </button>
+            <button type="button" class="menu-btn" id="btn-restart-race">
+              Restart race
+            </button>
+            <button type="button" class="menu-btn" id="btn-pause-audio">
+              Audio
+            </button>
+            <button type="button" class="menu-btn" id="btn-pause-fullscreen">
+              Fullscreen
+            </button>
+            <button type="button" class="menu-btn" id="btn-pause-main-menu">
+              Main menu
+            </button>
+          </div>
+          <p id="pause-hint" class="hint">
+            <kbd>Esc</kbd> / <kbd>P</kbd> / <kbd>Space</kbd> — resume (3…2…1… go!)
+          </p>
+        </div>
       </div>
     </div>
     <script type="module" src="game.js"></script>

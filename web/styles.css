@@ -66,7 +66,7 @@ body {
  * the WebView always paints it above the game canvas (GPU layer under in-tree overlays is unreliable).
  */
 /* JS may mirror these with setProperty(..., 'important') for stubborn WebViews. */
-#pause-overlay.pause-overlay-root {
+#game-menu-overlay.game-menu-overlay-root {
   position: fixed !important;
   left: 0 !important;
   top: 0 !important;
@@ -89,7 +89,7 @@ body {
   transform: translateZ(0);
 }
 
-#pause-overlay.pause-overlay-root.hidden {
+#game-menu-overlay.game-menu-overlay-root.hidden {
   display: none !important;
   pointer-events: none !important;
 }
@@ -116,7 +116,6 @@ body {
 .ui-overlay .pickup-legend,
 .ui-overlay .chat-panel,
 .ui-overlay .pickup-toast,
-.ui-overlay .restart-prompt,
 .ui-overlay #overlay,
 .ui-overlay #countdown {
   pointer-events: auto;
@@ -534,39 +533,6 @@ body {
   }
 }
 
-.restart-prompt {
-  position: absolute;
-  bottom: 6.5rem;
-  left: 50%;
-  transform: translateX(-50%);
-  width: min(480px, 94vw);
-  padding: 0.5rem 0.75rem;
-  text-align: center;
-  background: rgba(198, 40, 40, 0.35);
-  border: 1px solid rgba(255, 112, 67, 0.5);
-  border-radius: 8px;
-  font-size: 0.75rem;
-  letter-spacing: 0.03em;
-  color: #ffccbc;
-  z-index: 7;
-  backdrop-filter: blur(8px);
-}
-
-.restart-prompt.hidden {
-  display: none;
-}
-
-.restart-prompt kbd {
-  display: inline-block;
-  padding: 0.1rem 0.35rem;
-  margin: 0 0.1rem;
-  font-family: "JetBrains Mono", ui-monospace, monospace;
-  font-size: 0.7rem;
-  background: rgba(0, 0, 0, 0.35);
-  border-radius: 4px;
-  border: 1px solid rgba(255, 255, 255, 0.15);
-}
-
 .label {
   font-size: 0.6rem;
   text-transform: uppercase;
@@ -610,8 +576,78 @@ body {
   display: none;
 }
 
+.menu-panel.hidden {
+  display: none !important;
+}
+
+.menu-main-title {
+  margin: 0 0 0.5rem;
+  font-size: 1.35rem;
+  color: var(--accent);
+  text-align: center;
+}
+
+.menu-sub {
+  margin: 0 0 1.25rem;
+  color: var(--muted);
+  font-size: 0.88rem;
+  text-align: center;
+  line-height: 1.4;
+}
+
+.menu-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+}
+
+.menu-actions-stack {
+  margin-top: 0.75rem;
+}
+
+.menu-btn {
+  font-family: inherit;
+  font-size: 0.82rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  padding: 0.65rem 1rem;
+  border-radius: 10px;
+  border: 1px solid rgba(0, 229, 255, 0.4);
+  background: rgba(12, 20, 32, 0.92);
+  color: var(--text);
+  cursor: pointer;
+  transition:
+    background 0.15s,
+    border-color 0.15s;
+}
+
+.menu-btn:hover {
+  background: rgba(0, 229, 255, 0.12);
+  border-color: var(--accent);
+}
+
+.menu-btn-primary {
+  background: linear-gradient(
+    145deg,
+    rgba(0, 180, 200, 0.35),
+    rgba(0, 100, 120, 0.4)
+  );
+  border-color: var(--accent);
+}
+
+.menu-btn-danger {
+  border-color: rgba(255, 120, 100, 0.5);
+  color: #ffcdd2;
+}
+
+.menu-btn-danger:hover {
+  background: rgba(198, 40, 40, 0.25);
+}
+
 .pause-card {
-  max-width: 380px;
+  max-width: 400px;
   text-align: left;
   position: relative;
   z-index: 1;
@@ -619,8 +655,137 @@ body {
   transform: translateZ(0);
 }
 
+.pause-card:has(.menu-title-columns) {
+  max-width: min(640px, 98vw);
+}
+
+.menu-title-columns {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 1.25rem 1.5rem;
+}
+
+.menu-title-primary {
+  flex: 1 1 200px;
+  min-width: 0;
+}
+
+.leaderboard-aside {
+  flex: 0 1 220px;
+  max-width: 100%;
+  padding: 0.55rem 0.65rem !important;
+}
+
+.leaderboard-heading {
+  font-size: 0.62rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--gold);
+  margin: 0 0 0.2rem;
+  font-weight: 700;
+}
+
+.leaderboard-hint {
+  margin: 0 0 0.45rem;
+  font-size: 0.58rem;
+  color: var(--muted);
+  line-height: 1.35;
+}
+
+.leaderboard-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-family: "JetBrains Mono", ui-monospace, monospace;
+  font-size: 0.72rem;
+  line-height: 1.55;
+  color: #c5d4e8;
+}
+
+.leaderboard-list li {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.08rem 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.leaderboard-list li:last-child {
+  border-bottom: none;
+}
+
+.lb-rank {
+  color: var(--muted);
+  min-width: 1.5rem;
+}
+
+.lb-time {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.leaderboard-empty {
+  color: var(--muted);
+  font-style: italic;
+  border: none !important;
+  display: block;
+  text-align: left;
+}
+
+.overlay-leaderboard {
+  margin: 1rem auto 0;
+  padding-top: 0.85rem;
+  border-top: 1px solid rgba(0, 229, 255, 0.2);
+  max-width: 300px;
+  text-align: left;
+}
+
+.overlay-leaderboard .leaderboard-heading {
+  text-align: center;
+  margin-bottom: 0.45rem;
+}
+
+.overlay-leaderboard .leaderboard-list {
+  font-size: 0.75rem;
+}
+
+.overlay-card {
+  max-width: min(480px, 94vw);
+  text-align: center;
+}
+
+@media (max-width: 520px) {
+  .menu-title-columns {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .leaderboard-aside {
+    flex-basis: auto;
+  }
+}
+
 .pause-card h2 {
   text-align: center;
+}
+
+.menu-audio-title {
+  margin: 0 0 1rem;
+  font-size: 1.2rem;
+  color: var(--accent);
+  text-align: center;
+}
+
+.menu-volume-block {
+  margin-bottom: 0.75rem;
+  padding-bottom: 0.75rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.menu-volume-block .pause-volume:first-of-type {
+  margin-top: 0;
 }
 
 .pause-volume {
@@ -641,7 +806,7 @@ body {
 }
 
 /* WebKit/Chromium: style range track/thumb so sliders stay visible. */
-#pause-overlay.pause-overlay-root input[type="range"] {
+#game-menu-overlay.game-menu-overlay-root input[type="range"] {
   -webkit-appearance: none;
   appearance: none;
   width: 100%;
@@ -652,7 +817,7 @@ body {
   accent-color: var(--accent);
 }
 
-#pause-overlay.pause-overlay-root input[type="range"]::-webkit-slider-runnable-track {
+#game-menu-overlay.game-menu-overlay-root input[type="range"]::-webkit-slider-runnable-track {
   width: 100%;
   height: 10px;
   background: rgba(0, 229, 255, 0.22);
@@ -660,7 +825,7 @@ body {
   border: 1px solid rgba(0, 229, 255, 0.28);
 }
 
-#pause-overlay.pause-overlay-root input[type="range"]::-webkit-slider-thumb {
+#game-menu-overlay.game-menu-overlay-root input[type="range"]::-webkit-slider-thumb {
   -webkit-appearance: none;
   appearance: none;
   width: 20px;
@@ -672,7 +837,7 @@ body {
   box-shadow: 0 2px 10px rgba(0, 229, 255, 0.45);
 }
 
-#pause-overlay.pause-overlay-root input[type="range"]::-moz-range-track {
+#game-menu-overlay.game-menu-overlay-root input[type="range"]::-moz-range-track {
   width: 100%;
   height: 10px;
   background: rgba(0, 229, 255, 0.22);
@@ -680,7 +845,7 @@ body {
   border: 1px solid rgba(0, 229, 255, 0.28);
 }
 
-#pause-overlay.pause-overlay-root input[type="range"]::-moz-range-thumb {
+#game-menu-overlay.game-menu-overlay-root input[type="range"]::-moz-range-thumb {
   width: 18px;
   height: 18px;
   border-radius: 50%;
@@ -719,6 +884,21 @@ body {
 #overlay-sub {
   white-space: pre-line;
   color: #b0c4de;
+}
+
+.finish-rank {
+  margin: 0.85rem 0 0;
+  font-size: 1rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: var(--accent);
+  line-height: 1.35;
+  text-wrap: balance;
+}
+
+.finish-rank.finish-rank-podium {
+  color: var(--gold);
+  text-shadow: 0 0 24px rgba(255, 213, 79, 0.35);
 }
 
 .hint {
