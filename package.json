@@ -11,17 +11,20 @@
   },
   "scripts": {
     "start": "electron .",
+    "build:icon": "node scripts/render-icon.mjs",
     "dist": "electron-builder",
     "dist:dir": "electron-builder --dir"
   },
   "devDependencies": {
     "electron": "^33.2.1",
-    "electron-builder": "^25.1.8"
+    "electron-builder": "^25.1.8",
+    "sharp": "^0.33.5"
   },
   "build": {
     "publish": null,
     "appId": "dev.nkvoll.ane-racing-pro",
     "productName": "Ane Racing PRO",
+    "icon": "resources/icon.png",
     "files": [
       "electron/main.cjs",
       "electron/preload.cjs",

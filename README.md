@@ -22,7 +22,7 @@ That installs Electron and electron-builder and writes `package-lock.json`. Comm
 npm start
 ```
 
-This launches the Electron window with the game. Optional: open DevTools by setting an environment variable before starting:
+This launches the Electron window with the game. On macOS, the system menu bar may still show **Electron** while developing (`electron .`); a **packaged** build (`npm run dist`) uses the real app name and icon. Optional: open DevTools by setting an environment variable before starting:
 
 ```bash
 ELECTRON_OPEN_DEVTOOLS=1 npm start
@@ -40,7 +40,7 @@ Uses [electron-builder](https://www.electron.build/) (configured in `package.jso
 npm run dist
 ```
 
-Output goes to `dist/` (`.dmg` / `.zip` on macOS, `nsis` / `.exe` / `.zip` on Windows, `AppImage` / `.deb` on Linux).
+Output goes to `dist/` (`.dmg` / `.zip` on macOS, `nsis` / `.exe` / `.zip` on Windows, `AppImage` / `.deb` on Linux). The app icon is the committed **`resources/icon.png`** (see below).
 
 Quick unpacked test (faster, no installer):
 
@@ -61,6 +61,9 @@ npm run dist -- --win
 
 | Path | Purpose |
 |------|---------|
+| `resources/icon.svg` | Vector app icon (source — edit this) |
+| `resources/icon.png` | Raster icon checked into git (1024² for window + installers) |
+| `scripts/render-icon.mjs` | `npm run build:icon` — regenerate **`icon.png`** from **`icon.svg`** only when the art changes ([sharp](https://sharp.pixelplumbing.com/)) |
 | `web/` | Game: `index.html`, `game.js`, `styles.css`, `audio.js` |
 | `electron/main.cjs` | Electron main process — window + `loadFile` → `web/index.html` |
 | `package.json` | npm scripts, electron / electron-builder devDependencies |
