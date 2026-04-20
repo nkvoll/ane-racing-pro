@@ -18,8 +18,6 @@ let musicVolume = 1;
 let musicPhase = 0;
 let musicAcc = 0;
 const MUSIC_STEP = 0.17;
-/** One-shot buffer to destination after first successful resume (helps iOS output path). */
-let didPrimeSilent = false;
 
 export function ensureAudio() {
   if (!ctx) {
@@ -52,60 +50,10 @@ export function ensureAudio() {
     musicComp.connect(musicGain);
     musicGain.connect(masterGain);
   }
-  /* Do not call ctx.resume() here: iOS Safari ignores it unless triggered from a user gesture
-   * (rAF / music loop otherwise keeps the context suspended → “Now Playing” with no audible output). */
-  return ctx;
-}
-
-function primeSilentAfterResume() {
-  if (!ctx || didPrimeSilent || ctx.state !== "running") return;
-  didPrimeSilent = true;
-  try {
-    const c = ctx;
-    const buf = c.createBuffer(1, 1, c.sampleRate);
-    const src = c.createBufferSource();
-    src.buffer = buf;
-    const g = c.createGain();
-    g.gain.value = 0.0001;
-    src.connect(g);
-    g.connect(masterGain || c.destination);
-    src.start();
-  } catch (_) {}
-}
-
-/**
- * Call from tap / key handlers. iOS requires AudioContext.resume() from a user gesture;
- * safe to call repeatedly.
- */
-export function tryResumeAudioFromGesture() {
-  const c = ensureAudio();
-  if (c.state === "running") {
-    primeSilentAfterResume();
-    return;
+  if (ctx.state === "suspended") {
+    ctx.resume().catch(() => {});
   }
-  void c
-    .resume()
-    .then(() => {
-      primeSilentAfterResume();
-    })
-    .catch(() => {});
-}
-
-let userGestureUnlockInstalled = false;
-/** Registers capture listeners so the first tap anywhere unlocks audio on iOS / strict autoplay browsers. */
-export function installUserGestureAudioUnlock() {
-  if (userGestureUnlockInstalled || typeof document === "undefined") return;
-  userGestureUnlockInstalled = true;
-  const go = () => tryResumeAudioFromGesture();
-  document.addEventListener("pointerdown", go, { capture: true, passive: true });
-  document.addEventListener("touchend", go, { capture: true, passive: true });
-  document.addEventListener("keydown", go, { capture: true, passive: true });
-  document.addEventListener("visibilitychange", () => {
-    if (document.visibilityState !== "visible" || !ctx) return;
-    if (ctx.state === "suspended") {
-      void ctx.resume().then(() => primeSilentAfterResume()).catch(() => {});
-    }
-  });
+  return ctx;
 }
 
 /** Linear 0–1; persisted by the game (localStorage). */
@@ -187,7 +135,6 @@ function buildNoteGainCurve(vol, durSec) {
 
 export function playCannon() {
   const c = ensureAudio();
-  if (c.state !== "running") return;
   const o = c.createOscillator();
   const g = sfxGain();
   o.type = "square";
@@ -202,7 +149,6 @@ export function playCannon() {
 
 export function playMissile() {
   const c = ensureAudio();
-  if (c.state !== "running") return;
   const o = c.createOscillator();
   const g = sfxGain();
   o.type = "sawtooth";
@@ -217,7 +163,6 @@ export function playMissile() {
 
 export function playMineDrop() {
   const c = ensureAudio();
-  if (c.state !== "running") return;
   const o = c.createOscillator();
   const g = sfxGain();
   o.type = "triangle";
@@ -232,7 +177,6 @@ export function playMineDrop() {
 
 export function playPickup() {
   const c = ensureAudio();
-  if (c.state !== "running") return;
   const notes = [523, 659, 784];
   notes.forEach((freq, i) => {
     const o = c.createOscillator();
@@ -250,7 +194,6 @@ export function playPickup() {
 
 export function playHit() {
   const c = ensureAudio();
-  if (c.state !== "running") return;
   const buf = noiseBuffer(0.08);
   const src = c.createBufferSource();
   const g = sfxGain();
@@ -263,7 +206,6 @@ export function playHit() {
 
 export function playExplosion() {
   const c = ensureAudio();
-  if (c.state !== "running") return;
   const buf = noiseBuffer(0.35);
   const src = c.createBufferSource();
   const g = sfxGain();
@@ -281,7 +223,6 @@ export function playExplosion() {
 
 export function playWall() {
   const c = ensureAudio();
-  if (c.state !== "running") return;
   const o = c.createOscillator();
   const g = sfxGain();
   o.type = "triangle";
@@ -296,7 +237,6 @@ export function playWall() {
 
 export function playLap() {
   const c = ensureAudio();
-  if (c.state !== "running") return;
   const o = c.createOscillator();
   const g = sfxGain();
   o.type = "sine";
@@ -341,7 +281,6 @@ function playMusicNote(freq, type, vol, dur, when) {
 
 export function updateMusic(dt) {
   const c = ensureAudio();
-  if (c.state !== "running") return;
   musicAcc += dt;
 
   let musicCatchUp = 0;

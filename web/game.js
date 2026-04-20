@@ -2716,7 +2716,7 @@ if (touchJoystickBaseEl && touchJoystickKnobEl) {
     (ev) => {
       if (joystickPointerId !== null) return;
       try {
-        audio.tryResumeAudioFromGesture();
+        audio.ensureAudio();
       } catch (_) {}
       ev.preventDefault();
       joystickPointerId = ev.pointerId;
@@ -2740,7 +2740,7 @@ if (touchHudHbEl) {
   touchHudHbEl.addEventListener("pointerdown", (e) => {
     e.preventDefault();
     try {
-      audio.tryResumeAudioFromGesture();
+      audio.ensureAudio();
     } catch (_) {}
     setHb(true);
   });
@@ -2757,7 +2757,7 @@ function bindTouchWeapon(id, /** @type {"cannon"|"missile"|"mine"} */ type) {
   el.addEventListener("pointerdown", (e) => {
     e.preventDefault();
     try {
-      audio.tryResumeAudioFromGesture();
+      audio.ensureAudio();
     } catch (_) {}
     if (state.mode !== "race" || state.paused || player.wrecked) return;
     trySpawnProjectile(player, type);
@@ -2772,7 +2772,7 @@ if (touchHudMenuEl) {
   touchHudMenuEl.addEventListener("click", (e) => {
     e.preventDefault();
     try {
-      audio.tryResumeAudioFromGesture();
+      audio.ensureAudio();
     } catch (_) {}
     if (state.mode === "race" || state.mode === "countdown") {
       openRaceOrCountdownMenu();
@@ -2782,7 +2782,7 @@ if (touchHudMenuEl) {
 
 window.addEventListener("keydown", (e) => {
   try {
-    audio.tryResumeAudioFromGesture();
+    audio.ensureAudio();
   } catch (_) {}
 
   if (e.code === "ArrowUp" || e.code === "KeyW") keys.up = true;
@@ -2995,7 +2995,7 @@ function startSequence() {
 if (sfxVolumeEl) {
   sfxVolumeEl.addEventListener("input", () => {
     try {
-      audio.tryResumeAudioFromGesture();
+      audio.ensureAudio();
     } catch (_) {}
     const v = Number(sfxVolumeEl.value) / 100;
     audio.setSfxVolume(v);
@@ -3005,7 +3005,7 @@ if (sfxVolumeEl) {
 if (musicVolumeEl) {
   musicVolumeEl.addEventListener("input", () => {
     try {
-      audio.tryResumeAudioFromGesture();
+      audio.ensureAudio();
     } catch (_) {}
     const v = Number(musicVolumeEl.value) / 100;
     audio.setMusicVolume(v);
@@ -3147,6 +3147,7 @@ document.getElementById("btn-resume")?.addEventListener("click", () => resumeFro
 document.getElementById("btn-restart-race")?.addEventListener("click", () => restartRaceFromMenu());
 
 try {
+  audio.ensureAudio();
   const ss = localStorage.getItem("aneRacingSfxVol");
   const sm = localStorage.getItem("aneRacingMusicVol");
   if (ss != null) {
@@ -3166,8 +3167,6 @@ if (window.electronShell?.onFullscreenChange) {
 }
 void syncFullscreenButtonLabels();
 syncFullscreenMenuButtonVisibility();
-
-audio.installUserGestureAudioUnlock();
 
 populateLevelSelectList();
 initPickups();
