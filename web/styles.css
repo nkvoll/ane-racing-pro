@@ -1770,3 +1770,70 @@ body {
 html.force-mobile-testing .chat-panel {
   display: none !important;
 }
+
+/*Portrait → landscape — touch / tablet; dismissed for the tab session (sessionStorage). */
+.portrait-orient-hint {
+  position: fixed;
+  left: 0;
+  right: 0;
+  top: 0;
+  z-index: 2147483647;
+  pointer-events: none;
+}
+
+.portrait-orient-hint:not(.hidden) {
+  pointer-events: auto;
+}
+
+.portrait-orient-hint.hidden {
+  display: none !important;
+}
+
+.portrait-orient-hint-bar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.55rem;
+  flex-wrap: wrap;
+  padding: max(0.4rem, env(safe-area-inset-top, 0px)) 0.75rem 0.5rem;
+  background: rgba(6, 10, 18, 0.96);
+  border-bottom: 1px solid rgba(0, 229, 255, 0.38);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+}
+
+.portrait-orient-hint-icon {
+  font-size: 1.1rem;
+  color: var(--accent);
+  line-height: 1;
+}
+
+.portrait-orient-hint-text {
+  font-family: inherit;
+  font-size: 0.68rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: var(--text);
+  text-align: center;
+  max-width: 20rem;
+  line-height: 1.35;
+}
+
+.portrait-orient-hint-dismiss {
+  font-family: inherit;
+  font-size: 0.62rem;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  padding: 0.35rem 0.65rem;
+  border-radius: 8px;
+  border: 1px solid rgba(0, 229, 255, 0.45);
+  background: rgba(0, 229, 255, 0.12);
+  color: var(--accent);
+  cursor: pointer;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.portrait-orient-hint-dismiss:active {
+  background: rgba(0, 229, 255, 0.2);
+}

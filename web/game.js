@@ -2551,6 +2551,32 @@ function prefersTouchRaceHud() {
   return false;
 }
 
+const PORTRAIT_HINT_DISMISS_KEY = "aneRacingPortraitHintDismiss";
+
+/**
+ * Banner when a touch‑oriented client is in portrait (landscape plays best).
+ * Dismissal is per browser tab session (`sessionStorage`).
+ */
+function syncPortraitOrientationHint() {
+  const el = document.getElementById("portrait-orient-hint");
+  if (!el) return;
+  let dismissed = false;
+  try {
+    dismissed = sessionStorage.getItem(PORTRAIT_HINT_DISMISS_KEY) === "1";
+  } catch (_) {}
+  let portrait = false;
+  try {
+    portrait = matchMedia("(orientation: portrait)").matches;
+  } catch (_) {
+    const w = window.innerWidth || 0;
+    const h = window.innerHeight || 0;
+    portrait = w > 0 && h > 0 && w < h;
+  }
+  const show = !dismissed && portrait && prefersTouchRaceHud();
+  el.classList.toggle("hidden", !show);
+  el.setAttribute("aria-hidden", show ? "false" : "true");
+}
+
 function resetAllTouchDrive() {
   touchDrive.jx = 0;
   touchDrive.jy = 0;
@@ -3054,6 +3080,7 @@ document.getElementById("opt-force-mobile")?.addEventListener("change", (e) => {
   } catch (_) {}
   syncForceMobileClass();
   syncTouchRaceHud();
+  syncPortraitOrientationHint();
 });
 document
   .getElementById("btn-options-fullscreen")
@@ -3087,6 +3114,20 @@ void syncFullscreenButtonLabels();
 populateLevelSelectList();
 initPickups();
 showTitleMenu();
+
+document.getElementById("portrait-orient-hint-dismiss")?.addEventListener("click", () => {
+  try {
+    sessionStorage.setItem(PORTRAIT_HINT_DISMISS_KEY, "1");
+  } catch (_) {}
+  syncPortraitOrientationHint();
+});
+window.addEventListener("orientationchange", () => {
+  requestAnimationFrame(() => syncPortraitOrientationHint());
+});
+window.addEventListener("resize", () => {
+  requestAnimationFrame(() => syncPortraitOrientationHint());
+});
+requestAnimationFrame(() => syncPortraitOrientationHint());
 
 let lastFrame = performance.now();
 
