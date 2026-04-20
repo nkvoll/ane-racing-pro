@@ -396,9 +396,7 @@ function recordRaceFinishTime(totalSec) {
 
 /** @param finishHighlightTs `row.ts` of this race to highlight on the finish overlay list only; omit/null to clear. */
 function renderLeaderboard(finishHighlightTs = null) {
-  const titleList = document.getElementById("leaderboard-list-title");
   const finishList = document.getElementById("leaderboard-list-finish");
-  fillLeaderboardList(titleList, null);
   fillLeaderboardList(finishList, finishHighlightTs);
 }
 
@@ -1325,14 +1323,6 @@ function loadBestLapFromStorage() {
     v != null && !Number.isNaN(parseFloat(v)) ? parseFloat(v) : null;
 }
 
-function updateLeaderboardHeadingForTitle() {
-  const el = document.getElementById("leaderboard-track-label");
-  const def = getLevelByUid(activeLevelUid);
-  if (el) {
-    el.textContent = def.name;
-  }
-}
-
 /**
  * @param {string} levelUid
  * @param {{ repositionCars?: boolean, snapCamera?: boolean }} [options]
@@ -1353,10 +1343,21 @@ function setActiveLevel(levelUid, options = {}) {
     state.camera.x = player.x;
     state.camera.y = player.y;
   }
-  updateLeaderboardHeadingForTitle();
 }
 
 loadBestLapFromStorage();
+
+function finishScreenRestartRace() {
+  if (state.mode !== "finished") return;
+  if (overlayFinishActionsEl) overlayFinishActionsEl.classList.add("hidden");
+  startSequence();
+}
+
+function finishScreenGoToMainMenu() {
+  if (state.mode !== "finished") return;
+  prepareGridForRaceStart();
+  showTitleMenu();
+}
 
 let preRaceCountdownIntervalId = null;
 let preRaceCountdownTimeoutId = null;
@@ -1373,6 +1374,7 @@ const overlaySub = document.getElementById("overlay-sub");
 const overlayHintEl = document.getElementById("overlay-hint");
 const overlayFinishRankEl = document.getElementById("overlay-finish-rank");
 const overlayLeaderboardEl = document.getElementById("overlay-leaderboard");
+const overlayFinishActionsEl = document.getElementById("overlay-finish-actions");
 const countdownEl = document.getElementById("countdown");
 const lapDisplay = document.getElementById("lap-display");
 const currentTimeEl = document.getElementById("current-time");
@@ -1579,7 +1581,6 @@ function showTitleMenu() {
     });
   }
   renderLeaderboard(null);
-  updateLeaderboardHeadingForTitle();
 }
 
 function drawTrackPreviewCanvas(cnv, levelUid) {
@@ -1847,6 +1848,13 @@ function showOverlay(title, sub, show = true, hint = "", options = {}) {
     const showLb = Boolean(show && options.showLeaderboard);
     overlayLeaderboardEl.classList.toggle("hidden", !showLb);
   }
+  if (overlayFinishActionsEl) {
+    if (!show) {
+      overlayFinishActionsEl.classList.add("hidden");
+    } else {
+      overlayFinishActionsEl.classList.toggle("hidden", !options.showFinishActions);
+    }
+  }
 }
 
 function updateHud() {
@@ -1880,7 +1888,69 @@ const ACCEL = 520;
 const FRICTION = 0.978;
 const STEER = 2.85;
 const MAX_SPEED = 420;
-const AI_MAX = 380;
+const AI_MAX = 404;
+
+/** Point on the centerline ~`distAhead` forward from vertex index `fromIdx` (arc-length). */
+function getCenterPointAhead(fromIdx, distAhead) {
+  const n = track.n;
+  let i = ((fromIdx % n) + n) % n;
+  let remaining = distAhead;
+  for (let guard = 0; guard <= n + 6 && remaining > 0.35; guard++) {
+    const j = (i + 1) % n;
+    const ax = track.center[i].x;
+    const ay = track.center[i].y;
+    const bx = track.center[j].x;
+    const by = track.center[j].y;
+    const sl = hypot(bx - ax, by - ay);
+    if (sl < 1e-6) {
+      i = j;
+      continue;
+    }
+    if (remaining <= sl) {
+      const t = remaining / sl;
+      return { x: ax + (bx - ax) * t, y: ay + (by - ay) * t };
+    }
+    remaining -= sl;
+    i = j;
+  }
+  return { x: track.center[i].x, y: track.center[i].y };
+}
+
+/** Stable direction away from the nearest wall chords (helps bots hold a clean line). */
+function aiWallRepulsion(car) {
+  let rx = 0;
+  let ry = 0;
+  const targetClear = CAR_R + 36;
+  for (const seg of track.wallSegments) {
+    const d = distPointSegment(car.x, car.y, seg.a.x, seg.a.y, seg.b.x, seg.b.y);
+    if (d >= targetClear + 18) continue;
+    const ax = seg.a.x;
+    const ay = seg.a.y;
+    const bx = seg.b.x;
+    const by = seg.b.y;
+    const abx = bx - ax;
+    const aby = by - ay;
+    const apx = car.x - ax;
+    const apy = car.y - ay;
+    const ab2 = abx * abx + aby * aby;
+    let t = ab2 > 0 ? (apx * abx + apy * aby) / ab2 : 0;
+    t = clamp(t, 0, 1);
+    const qx = ax + abx * t;
+    const qy = ay + aby * t;
+    let nx = car.x - qx;
+    let ny = car.y - qy;
+    const nl = hypot(nx, ny);
+    if (nl < 1e-6) continue;
+    nx /= nl;
+    ny /= nl;
+    const pen = clamp((targetClear - d) / targetClear, 0, 1);
+    rx += nx * pen;
+    ry += ny * pen;
+  }
+  const rl = hypot(rx, ry);
+  if (rl < 0.06) return { x: 0, y: 0 };
+  return { x: rx / rl, y: ry / rl };
+}
 
 function resolveCarWalls(car) {
   for (const seg of track.wallSegments) {
@@ -1972,23 +2042,55 @@ function updateCar(car, dt, input) {
       car.vy *= bleed;
     }
   } else {
-    const tgt = track.center[car.aiWp % track.n];
-    const dx = tgt.x - car.x;
-    const dy = tgt.y - car.y;
-    const want = Math.atan2(dy, dx);
-    let diff = wrapAngle(want - car.angle + car.aiOffset * 0.35);
-    const steerAi = clamp(diff * 2.4, -1, 1);
-    car.angle += steerAi * STEER * dt * 0.92;
+    const nowSec = performance.now() * 0.001;
+    const tRace =
+      state.raceStartTime > 0 ? nowSec - state.raceStartTime : 999;
+    /** 0 right at green → 1 after a few seconds: eases launch aggression */
+    const startEase = clamp(tRace / 2.5, 0, 1);
 
-    const boost =
-      (0.88 + Math.sin(performance.now() * 0.002 + car.aiOffset * 12) * 0.08) *
-      (car.boostT > 0 ? 1.25 : 1);
-    const ax = Math.cos(car.angle) * ACCEL * boost;
-    const ay = Math.sin(car.angle) * ACCEL * boost;
+    const wp = car.aiWp % track.n;
+    const tan0 = track.tangent(wp);
+    const across = { x: -tan0.y, y: tan0.x };
+    const lateral = car.aiOffset * track.width * (0.09 + 0.07 * startEase);
+    const lookBase = 168 + Math.abs(car.aiOffset) * 48;
+    const look = lookBase * (0.52 + 0.48 * startEase);
+    const ahead = getCenterPointAhead(wp, look);
+    let tx = ahead.x + across.x * lateral;
+    let ty = ahead.y + across.y * lateral;
+    const rep = aiWallRepulsion(car);
+    const repGain = 112 * (1.4 - 0.35 * startEase);
+    tx += rep.x * repGain;
+    ty += rep.y * repGain;
+
+    const dx = tx - car.x;
+    const dy = ty - car.y;
+    const want = Math.atan2(dy, dx);
+    let diff = wrapAngle(want - car.angle + car.aiOffset * 0.12 * startEase);
+    const steerGain = (2.65 + 0.47 * startEase) * (0.82 + 0.18 * clamp(car.speed / 120, 0, 1));
+    const steerAi = clamp(diff * steerGain, -1, 1);
+    car.angle += steerAi * STEER * dt * (0.88 + 0.12 * startEase);
+
+    const cornerBrake = clamp(
+      Math.abs(diff) * (1.15 + 0.45 * (1 - startEase)),
+      0,
+      1
+    );
+    let throttle =
+      (1 - cornerBrake * (0.38 + 0.16 * (1 - startEase))) *
+      (0.91 + Math.sin(performance.now() * 0.0016 + car.aiOffset * 11) * 0.048);
+    if (car.boostT > 0) {
+      throttle *= 1.25;
+    }
+    throttle *= 0.44 + 0.56 * startEase;
+    const ax = Math.cos(car.angle) * ACCEL * throttle;
+    const ay = Math.sin(car.angle) * ACCEL * throttle;
     car.vx += ax * dt;
     car.vy += ay * dt;
 
-    if (hypot(dx, dy) < 88) {
+    const cx = track.center[wp].x;
+    const cy = track.center[wp].y;
+    const passDist = 52 + 22 * startEase;
+    if (hypot(cx - car.x, cy - car.y) < passDist) {
       car.aiWp = (car.aiWp + 1) % track.n;
     }
   }
@@ -2059,8 +2161,12 @@ function checkCarLap(car, prev, curr) {
       "Finish!",
       `Total time: ${formatTime(totalTime)}\nBest lap: ${formatTime(state.bestLap)}`,
       true,
-      "Space to race again",
-      { showLeaderboard: true, finishRank: rank }
+      "",
+      {
+        showLeaderboard: true,
+        finishRank: rank,
+        showFinishActions: true,
+      }
     );
     try {
       audio.playLap();
@@ -2145,8 +2251,8 @@ window.addEventListener("keydown", (e) => {
       resumeFromGameMenu();
       return;
     }
-    if (state.mode === "finished") startSequence();
   }
+
   if (
     state.mode === "race" &&
     !state.paused &&
@@ -2182,7 +2288,7 @@ function prepareGridForRaceStart() {
     c.angle = slot.angle;
     c.vx = 0;
     c.vy = 0;
-    c.aiWp = (Math.floor(track.n * 0.15) + i * 7) % track.n;
+    c.aiWp = nearestCenterIndex(c.x, c.y);
     c.maxHp = 100;
     c.hp = 100;
     c.shieldT = 0;
@@ -2312,6 +2418,12 @@ document.getElementById("btn-level-start")?.addEventListener("click", () => {
   if (menuSubScreen === "levels" && state.mode === "title") {
     startRaceFromLevelSelect();
   }
+});
+document.getElementById("btn-finish-restart")?.addEventListener("click", () => {
+  finishScreenRestartRace();
+});
+document.getElementById("btn-finish-main-menu")?.addEventListener("click", () => {
+  finishScreenGoToMainMenu();
 });
 document.getElementById("btn-title-instructions")?.addEventListener("click", () => showInstructionsSubmenu());
 document.getElementById("btn-pause-instructions")?.addEventListener("click", () => showInstructionsSubmenu());

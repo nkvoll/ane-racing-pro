@@ -648,8 +648,12 @@ body {
   transform: translateZ(0);
 }
 
-.pause-card:has(.menu-title-columns) {
+.pause-card:has(.menu-title-columns:not(.menu-title-columns--solo)) {
   max-width: min(640px, 98vw);
+}
+
+.pause-card:has(.menu-title-columns--solo) {
+  max-width: min(440px, 96vw);
 }
 
 .pause-card:has(#menu-panel-instructions:not(.hidden)) {
@@ -1151,6 +1155,33 @@ body {
 .hint.hidden {
   display: none;
   margin: 0 !important;
+}
+
+.overlay-finish-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+  justify-content: center;
+  align-items: center;
+  margin-top: 1.25rem;
+  padding-top: 0.25rem;
+}
+
+.overlay-finish-actions.hidden {
+  display: none;
+}
+
+.overlay-finish-actions .menu-btn {
+  min-width: 140px;
+}
+
+.menu-title-columns--solo {
+  justify-content: center;
+}
+
+.menu-title-columns--solo .menu-title-primary {
+  max-width: 28rem;
+  margin: 0 auto;
 }
 
 .countdown {

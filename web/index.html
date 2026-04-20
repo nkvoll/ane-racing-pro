@@ -77,6 +77,12 @@
             <ol id="leaderboard-list-finish" class="leaderboard-list"></ol>
           </div>
           <p id="overlay-hint" class="hint hidden"></p>
+          <div id="overlay-finish-actions" class="overlay-finish-actions hidden">
+            <button type="button" class="menu-btn menu-btn-primary" id="btn-finish-restart">
+              Restart race
+            </button>
+            <button type="button" class="menu-btn" id="btn-finish-main-menu">Main menu</button>
+          </div>
         </div>
       </div>
       <div id="countdown" class="countdown hidden"></div>
@@ -242,7 +248,7 @@
           </div>
         </div>
         <div id="menu-panel-title" class="menu-panel">
-          <div class="menu-title-columns">
+          <div class="menu-title-columns menu-title-columns--solo">
             <div class="menu-title-primary">
           <h2 class="menu-main-title">Ane Racing PRO</h2>
           <div class="menu-actions">
@@ -263,14 +269,6 @@
             </button>
           </div>
             </div>
-            <aside class="leaderboard-aside panel" aria-label="Top saved races">
-              <div class="leaderboard-heading">Top 10 races</div>
-              <p class="leaderboard-hint">
-                <span id="leaderboard-track-label">—</span>
-                · 3-lap totals · saved on this device
-              </p>
-              <ol id="leaderboard-list-title" class="leaderboard-list"></ol>
-            </aside>
           </div>
         </div>
         <div id="menu-panel-pause" class="menu-panel hidden">
