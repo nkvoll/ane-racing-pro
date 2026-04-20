@@ -1351,7 +1351,7 @@ let preRaceCountdownIntervalId = null;
 let preRaceCountdownTimeoutId = null;
 let resumeCountdownIntervalId = null;
 let resumeCountdownTimeoutId = null;
-/** "main" | "audio" | "instructions" | "levels" | "editor" — nested menu screens */
+/** "main" | "audio" | "instructions" | "levels" | "editor" | "options" — nested menu screens */
 let menuSubScreen = "main";
 /** When opening the editor from the title screen, Back returns to the title instead of the track list. */
 let trackEditorFromTitle = false;
@@ -1359,6 +1359,20 @@ let trackEditorFromTitle = false;
 let trackEditorApi = null;
 /** Highlighted level in the picker (stable UUID, not list index). */
 let levelSelectUid = LEVELS[0].uid;
+
+const CHECKPOINT_RINGS_KEY = "aneRacingShowCheckpointRings";
+/** Persisted UI toggles; checkpoint lap logic is unchanged when rings are off. */
+const gameOptions = { showCheckpointRings: false };
+function loadCheckpointRingsOption() {
+  try {
+    const v = localStorage.getItem(CHECKPOINT_RINGS_KEY);
+    if (v === "1" || v === "true") return true;
+    return false;
+  } catch (_) {
+    return false;
+  }
+}
+gameOptions.showCheckpointRings = loadCheckpointRingsOption();
 
 const overlay = document.getElementById("overlay");
 const overlayTitle = document.getElementById("overlay-title");
@@ -1451,9 +1465,11 @@ function updateGameMenuPanels() {
   const pausePanel = document.getElementById("menu-panel-pause");
   const audioPanel = document.getElementById("menu-panel-audio");
   const instructionsPanel = document.getElementById("menu-panel-instructions");
+  const optionsPanel = document.getElementById("menu-panel-options");
   const levelPanel = document.getElementById("menu-panel-level-select");
   const editorPanel = document.getElementById("menu-panel-track-editor");
-  if (!titlePanel || !pausePanel || !audioPanel || !instructionsPanel) return;
+  if (!titlePanel || !pausePanel || !audioPanel || !instructionsPanel || !optionsPanel)
+    return;
   const showTitle =
     state.mode === "title" && state.menuContext === "title" && state.menuOpen;
 
@@ -1461,6 +1477,7 @@ function updateGameMenuPanels() {
     editorPanel?.classList.remove("hidden");
     levelPanel?.classList.add("hidden");
     audioPanel.classList.add("hidden");
+    optionsPanel.classList.add("hidden");
     instructionsPanel.classList.add("hidden");
     titlePanel.classList.add("hidden");
     pausePanel.classList.add("hidden");
@@ -1471,6 +1488,7 @@ function updateGameMenuPanels() {
   if (menuSubScreen === "levels") {
     levelPanel?.classList.remove("hidden");
     audioPanel.classList.add("hidden");
+    optionsPanel.classList.add("hidden");
     instructionsPanel.classList.add("hidden");
     titlePanel.classList.add("hidden");
     pausePanel.classList.add("hidden");
@@ -1478,8 +1496,18 @@ function updateGameMenuPanels() {
   }
   levelPanel?.classList.add("hidden");
 
+  if (menuSubScreen === "options") {
+    optionsPanel.classList.remove("hidden");
+    audioPanel.classList.add("hidden");
+    instructionsPanel.classList.add("hidden");
+    titlePanel.classList.add("hidden");
+    pausePanel.classList.add("hidden");
+    return;
+  }
+
   if (menuSubScreen === "audio") {
     audioPanel.classList.remove("hidden");
+    optionsPanel.classList.add("hidden");
     instructionsPanel.classList.add("hidden");
     titlePanel.classList.add("hidden");
     pausePanel.classList.add("hidden");
@@ -1489,12 +1517,14 @@ function updateGameMenuPanels() {
   if (menuSubScreen === "instructions") {
     instructionsPanel.classList.remove("hidden");
     audioPanel.classList.add("hidden");
+    optionsPanel.classList.add("hidden");
     titlePanel.classList.add("hidden");
     pausePanel.classList.add("hidden");
     return;
   }
 
   audioPanel.classList.add("hidden");
+  optionsPanel.classList.add("hidden");
   instructionsPanel.classList.add("hidden");
   titlePanel.classList.toggle("hidden", !showTitle);
   pausePanel.classList.toggle("hidden", showTitle);
@@ -1513,6 +1543,17 @@ function showAudioSubmenu() {
 
 function showInstructionsSubmenu() {
   menuSubScreen = "instructions";
+  updateGameMenuPanels();
+}
+
+function syncOptionsUi() {
+  const el = document.getElementById("opt-show-checkpoints");
+  if (el) el.checked = gameOptions.showCheckpointRings;
+}
+
+function showOptionsSubmenu() {
+  menuSubScreen = "options";
+  syncOptionsUi();
   updateGameMenuPanels();
 }
 
@@ -2351,7 +2392,12 @@ window.addEventListener("keydown", (e) => {
       closeTrackEditorFromBack();
       return;
     }
-    if (state.menuOpen && (menuSubScreen === "audio" || menuSubScreen === "instructions")) {
+    if (
+      state.menuOpen &&
+      (menuSubScreen === "audio" ||
+        menuSubScreen === "instructions" ||
+        menuSubScreen === "options")
+    ) {
       e.preventDefault();
       exitMenuSubscreen();
       return;
@@ -2379,7 +2425,12 @@ window.addEventListener("keydown", (e) => {
   }
 
   if (e.code === "KeyP" && !e.repeat) {
-    if (state.menuOpen && (menuSubScreen === "audio" || menuSubScreen === "instructions")) {
+    if (
+      state.menuOpen &&
+      (menuSubScreen === "audio" ||
+        menuSubScreen === "instructions" ||
+        menuSubScreen === "options")
+    ) {
       e.preventDefault();
       exitMenuSubscreen();
       return;
@@ -2398,7 +2449,11 @@ window.addEventListener("keydown", (e) => {
       if (menuSubScreen === "editor") {
         return;
       }
-      if (menuSubScreen === "audio" || menuSubScreen === "instructions") {
+      if (
+        menuSubScreen === "audio" ||
+        menuSubScreen === "instructions" ||
+        menuSubScreen === "options"
+      ) {
         exitMenuSubscreen();
         return;
       }
@@ -2559,7 +2614,11 @@ if (gameMenuOverlayEl) {
       closeTrackEditorFromBack();
       return;
     }
-    if (menuSubScreen === "audio" || menuSubScreen === "instructions") {
+    if (
+      menuSubScreen === "audio" ||
+      menuSubScreen === "instructions" ||
+      menuSubScreen === "options"
+    ) {
       exitMenuSubscreen();
       return;
     }
@@ -2634,10 +2693,20 @@ document.getElementById("btn-finish-main-menu")?.addEventListener("click", () =>
 });
 document.getElementById("btn-title-instructions")?.addEventListener("click", () => showInstructionsSubmenu());
 document.getElementById("btn-pause-instructions")?.addEventListener("click", () => showInstructionsSubmenu());
+document.getElementById("btn-title-options")?.addEventListener("click", () => showOptionsSubmenu());
+document.getElementById("btn-pause-options")?.addEventListener("click", () => showOptionsSubmenu());
 document.getElementById("btn-title-audio")?.addEventListener("click", () => showAudioSubmenu());
 document.getElementById("btn-pause-audio")?.addEventListener("click", () => showAudioSubmenu());
 document.getElementById("btn-audio-back")?.addEventListener("click", () => exitMenuSubscreen());
 document.getElementById("btn-instructions-back")?.addEventListener("click", () => exitMenuSubscreen());
+document.getElementById("btn-options-back")?.addEventListener("click", () => exitMenuSubscreen());
+document.getElementById("opt-show-checkpoints")?.addEventListener("change", (e) => {
+  const on = /** @type {HTMLInputElement} */ (e.target).checked;
+  gameOptions.showCheckpointRings = on;
+  try {
+    localStorage.setItem(CHECKPOINT_RINGS_KEY, on ? "1" : "0");
+  } catch (_) {}
+});
 document
   .getElementById("btn-title-fullscreen")
   ?.addEventListener("click", () => toggleFullscreenGame());
@@ -2809,7 +2878,7 @@ function drawWorld() {
 
   // Checkpoint drivethrough disks (must cross in order — skipping a disk means S/F won’t count a lap)
   const cpsDraw = cpsGate;
-  if (cpsDraw.length > 0) {
+  if (gameOptions.showCheckpointRings && cpsDraw.length > 0) {
     const inRace = state.mode === "race";
     const nextIdx = inRace ? player.nextCheckpointIndex : -1;
     for (let i = 0; i < cpsDraw.length; i++) {
@@ -3217,5 +3286,6 @@ function frame(now) {
   requestAnimationFrame(frame);
 }
 
+syncOptionsUi();
 updateHud();
 requestAnimationFrame(frame);

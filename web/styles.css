@@ -660,6 +660,10 @@ body {
   max-width: min(460px, 96vw);
 }
 
+.pause-card:has(#menu-panel-options:not(.hidden)) {
+  max-width: min(460px, 96vw);
+}
+
 .pause-card:has(#menu-panel-level-select:not(.hidden)) {
   max-width: min(920px, 98vw);
 }
@@ -1122,6 +1126,43 @@ body {
   font-size: 1.2rem;
   color: var(--accent);
   text-align: center;
+}
+
+.menu-options-title {
+  margin: 0 0 0.85rem;
+  font-size: 1.2rem;
+  color: var(--accent);
+  text-align: center;
+}
+
+.menu-options-body {
+  margin-bottom: 0.75rem;
+  text-align: left;
+}
+
+.menu-options-row {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  cursor: pointer;
+  font-size: 0.9rem;
+  color: #d8e4f4;
+  user-select: none;
+}
+
+.menu-options-row input[type="checkbox"] {
+  width: 1.1rem;
+  height: 1.1rem;
+  flex-shrink: 0;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+
+.menu-options-hint {
+  margin: 0.65rem 0 0;
+  font-size: 0.72rem;
+  line-height: 1.45;
+  color: var(--muted);
 }
 
 .menu-instructions-title {

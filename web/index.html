@@ -95,6 +95,21 @@
       aria-hidden="true"
     >
       <div class="card pause-card game-menu-card">
+        <div id="menu-panel-options" class="menu-panel menu-panel-options hidden">
+          <h2 class="menu-options-title">Options</h2>
+          <div class="menu-options-body" aria-label="Gameplay options">
+            <label class="menu-options-row">
+              <input type="checkbox" id="opt-show-checkpoints" />
+              <span>Show checkpoint rings</span>
+            </label>
+            <p class="menu-options-hint">When off, drivethrough checkpoints are hidden; laps still use checkpoints.</p>
+          </div>
+          <div class="menu-actions">
+            <button type="button" class="menu-btn menu-btn-primary" id="btn-options-back">
+              Back
+            </button>
+          </div>
+        </div>
         <div id="menu-panel-audio" class="menu-panel menu-panel-audio hidden">
           <h2 class="menu-audio-title">Audio</h2>
           <div class="menu-volume-block" aria-label="Volume">
@@ -327,6 +342,9 @@
             <button type="button" class="menu-btn" id="btn-title-instructions">
               Instructions
             </button>
+            <button type="button" class="menu-btn" id="btn-title-options">
+              Options
+            </button>
             <button type="button" class="menu-btn" id="btn-title-audio">
               Audio
             </button>
@@ -351,6 +369,9 @@
             </button>
             <button type="button" class="menu-btn" id="btn-pause-instructions">
               Instructions
+            </button>
+            <button type="button" class="menu-btn" id="btn-pause-options">
+              Options
             </button>
             <button type="button" class="menu-btn" id="btn-pause-audio">
               Audio
