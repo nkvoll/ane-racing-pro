@@ -69,6 +69,24 @@
             aria-live="polite"
           ></p>
           <div
+            id="overlay-lb-name-wrap"
+            class="overlay-lb-name-wrap hidden"
+            aria-hidden="true"
+          >
+            <label class="overlay-lb-name-label" for="overlay-lb-name-input"
+              >Name (max 16 characters)</label
+            >
+            <input
+              id="overlay-lb-name-input"
+              type="text"
+              class="overlay-lb-name-input"
+              maxlength="16"
+              autocomplete="off"
+              spellcheck="false"
+              placeholder="Your name"
+            />
+          </div>
+          <div
             id="overlay-leaderboard"
             class="overlay-leaderboard hidden"
             aria-label="Top saved races"
@@ -104,14 +122,7 @@
             </label>
             <p class="menu-options-hint">When off, drivethrough checkpoints are hidden; laps still use checkpoints.</p>
           </div>
-          <div class="menu-actions">
-            <button type="button" class="menu-btn menu-btn-primary" id="btn-options-back">
-              Back
-            </button>
-          </div>
-        </div>
-        <div id="menu-panel-audio" class="menu-panel menu-panel-audio hidden">
-          <h2 class="menu-audio-title">Audio</h2>
+          <h3 class="menu-options-section-title">Audio</h3>
           <div class="menu-volume-block" aria-label="Volume">
             <div class="pause-volume">
               <label class="volume-label" for="sfx-volume">Sound effects</label>
@@ -138,8 +149,13 @@
               />
             </div>
           </div>
+          <div class="menu-options-display">
+            <button type="button" class="menu-btn menu-btn-fullwidth" id="btn-options-fullscreen">
+              Fullscreen
+            </button>
+          </div>
           <div class="menu-actions">
-            <button type="button" class="menu-btn menu-btn-primary" id="btn-audio-back">
+            <button type="button" class="menu-btn menu-btn-primary" id="btn-options-back">
               Back
             </button>
           </div>
@@ -338,12 +354,6 @@
             <button type="button" class="menu-btn" id="btn-title-options">
               Options
             </button>
-            <button type="button" class="menu-btn" id="btn-title-audio">
-              Audio
-            </button>
-            <button type="button" class="menu-btn" id="btn-title-fullscreen">
-              Fullscreen
-            </button>
             <button type="button" class="menu-btn menu-btn-danger" id="btn-title-exit">
               Exit game
             </button>
@@ -365,12 +375,6 @@
             </button>
             <button type="button" class="menu-btn" id="btn-pause-options">
               Options
-            </button>
-            <button type="button" class="menu-btn" id="btn-pause-audio">
-              Audio
-            </button>
-            <button type="button" class="menu-btn" id="btn-pause-fullscreen">
-              Fullscreen
             </button>
             <button type="button" class="menu-btn" id="btn-pause-main-menu">
               Main menu

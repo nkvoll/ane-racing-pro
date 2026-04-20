@@ -11,6 +11,84 @@ import {
   TRACK_WIDTH,
 } from "./track-geometry.js";
 
+/** Modifier-style words for auto-generated track titles (pair with TRACK_NAME_TAIL). */
+const TRACK_NAME_HEAD = [
+  "Obsidian",
+  "Velvet",
+  "Crimson",
+  "Neon",
+  "Silent",
+  "Savage",
+  "Golden",
+  "Arctic",
+  "Urban",
+  "Blazing",
+  "Solar",
+  "Lunar",
+  "Phantom",
+  "Razor",
+  "Midnight",
+  "Coastal",
+  "Alpine",
+  "Quantum",
+  "Vintage",
+  "Turbo",
+  "Storm",
+  "Void",
+  "Indigo",
+  "Chrome",
+  "Copper",
+  "Ember",
+  "Frost",
+  "Vapor",
+  "Pulse",
+  "Vector",
+  "Carbon",
+  "Mercury",
+  "Stellar",
+  "Rogue",
+  "Prime",
+  "Wild",
+  "Granite",
+  "Silk",
+];
+
+/** Circuit / motorsport nouns — second half of auto-generated titles. */
+const TRACK_NAME_TAIL = [
+  "Circuit",
+  "Speedway",
+  "Pass",
+  "Chase",
+  "Apex",
+  "Gauntlet",
+  "Slipstream",
+  "Straight",
+  "Esses",
+  "Sector",
+  "Ring",
+  "Loop",
+  "Draft",
+  "Grid",
+  "Corkscrew",
+  "Switchback",
+  "Kink",
+  "Oval",
+  "Run",
+  "Line",
+  "Drift",
+  "Hairpin",
+];
+
+function pickRandomWord(list) {
+  const i = Math.floor(Math.random() * list.length);
+  return list[i];
+}
+
+/** Two-word label when opening the editor or when the name field is left blank. */
+function provisionalTrackName() {
+  return `${pickRandomWord(TRACK_NAME_HEAD)} ${pickRandomWord(TRACK_NAME_TAIL)}`;
+}
+
 function hypot(a, b) {
   return Math.sqrt(a * a + b * b);
 }
@@ -219,7 +297,7 @@ export function initTrackEditor(opts) {
   );
   const hintEl = document.getElementById("track-editor-hint");
 
-  if (nameInput) nameInput.value = opts.initial?.name || "My track";
+  if (nameInput) nameInput.value = opts.initial?.name || provisionalTrackName();
   if (widthInput) widthInput.value = String(opts.initial?.widthScale ?? 1);
 
   function onRoadParamInput() {
@@ -233,7 +311,7 @@ export function initTrackEditor(opts) {
   }
 
   function getFormPayload() {
-    const name = nameInput?.value?.trim() || "Untitled track";
+    const name = nameInput?.value?.trim() || provisionalTrackName();
     const widthScale = clamp(parseFloat(String(widthInput?.value ?? "1")) || 1, 0.75, 1.35);
     return { name, widthScale };
   }

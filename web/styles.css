@@ -661,7 +661,7 @@ body {
 }
 
 .pause-card:has(#menu-panel-options:not(.hidden)) {
-  max-width: min(460px, 96vw);
+  max-width: min(480px, 96vw);
 }
 
 .pause-card:has(#menu-panel-level-select:not(.hidden)) {
@@ -1043,7 +1043,8 @@ body {
 .leaderboard-list li {
   display: flex;
   justify-content: space-between;
-  gap: 0.75rem;
+  align-items: center;
+  gap: 0.5rem;
   padding: 0.08rem 0;
   border-bottom: 1px solid rgba(255, 255, 255, 0.06);
 }
@@ -1062,6 +1063,10 @@ body {
   box-shadow: 0 0 18px rgba(0, 229, 255, 0.12);
 }
 
+.leaderboard-list li.leaderboard-row--you .lb-name {
+  color: #c5ecf5;
+}
+
 .leaderboard-list li.leaderboard-row--you .lb-time {
   color: #b2ffff;
 }
@@ -1069,11 +1074,56 @@ body {
 .lb-rank {
   color: var(--muted);
   min-width: 1.5rem;
+  flex-shrink: 0;
+}
+
+.lb-name {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: #a8b8cc;
+  text-align: left;
 }
 
 .lb-time {
   color: var(--accent);
   font-weight: 600;
+  flex-shrink: 0;
+}
+
+.overlay-lb-name-wrap {
+  margin: 0.75rem auto 0;
+  max-width: 280px;
+  text-align: left;
+}
+
+.overlay-lb-name-label {
+  display: block;
+  font-size: 0.65rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin: 0 0 0.35rem;
+}
+
+.overlay-lb-name-input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 0.45rem 0.55rem;
+  font-family: inherit;
+  font-size: 0.9rem;
+  color: #e8f0ff;
+  background: rgba(0, 0, 0, 0.35);
+  border: 1px solid rgba(0, 229, 255, 0.35);
+  border-radius: 6px;
+}
+
+.overlay-lb-name-input:focus {
+  outline: none;
+  border-color: rgba(0, 229, 255, 0.65);
+  box-shadow: 0 0 0 2px rgba(0, 229, 255, 0.15);
 }
 
 .leaderboard-empty {
@@ -1121,11 +1171,22 @@ body {
   text-align: center;
 }
 
-.menu-audio-title {
-  margin: 0 0 1rem;
-  font-size: 1.2rem;
-  color: var(--accent);
-  text-align: center;
+.menu-options-section-title {
+  margin: 1.1rem 0 0.15rem;
+  font-size: 0.68rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--gold);
+  font-weight: 700;
+  text-align: left;
+}
+
+.menu-options-display {
+  margin: 0 0 0.85rem;
+}
+
+.menu-btn-fullwidth {
+  width: 100%;
 }
 
 .menu-options-title {

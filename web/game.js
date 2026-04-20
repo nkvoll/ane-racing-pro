@@ -235,6 +235,29 @@ function formatTime(sec) {
 
 const LEGACY_LEADERBOARD_KEY = "aneRacingTop10RaceTimes";
 const LEADERBOARD_MAX = 10;
+const LEADERBOARD_NAME_MAX = 16;
+/** Default name for the next qualifying finish — also last name typed on the finish overlay. */
+const LB_DISPLAY_NAME_KEY = "aneRacingLbDisplayName";
+
+/** @param {string} s */
+function sanitizeLeaderboardName(s) {
+  const t = String(s ?? "")
+    .replace(/[\u0000-\u001F\u007F]/g, "")
+    .trim()
+    .slice(0, LEADERBOARD_NAME_MAX);
+  return t;
+}
+
+/** `ts` of the row on the finish screen name field, or null */
+let pendingLeaderboardEntryTs = null;
+
+function flushPendingLeaderboardName() {
+  if (pendingLeaderboardEntryTs == null || !overlayLbNameInputEl) return;
+  updateLeaderboardEntryName(
+    pendingLeaderboardEntryTs,
+    overlayLbNameInputEl.value
+  );
+}
 
 function leaderboardStorageKey() {
   return `aneRacingTop10_${activeLevelUid}`;
@@ -296,15 +319,19 @@ function parseLeaderboard() {
   return parseLeaderboardForLevelUid(activeLevelUid);
 }
 
-/** Saves this race finish; returns 1–10 if it made the top {LEADERBOARD_MAX} saved races, else null. */
+/** Saves this race finish; returns rank and entry timestamp when stored in the top {LEADERBOARD_MAX}. */
 function recordRaceFinishTime(totalSec) {
   if (!Number.isFinite(totalSec) || totalSec <= 0) {
     renderLeaderboard(null);
-    return { rank: null };
+    return { rank: null, leaderboardEntryTs: null };
   }
   const rows = [...parseLeaderboard()];
   const ts = Date.now();
-  rows.push({ time: totalSec, ts });
+  let defaultName = "";
+  try {
+    defaultName = sanitizeLeaderboardName(localStorage.getItem(LB_DISPLAY_NAME_KEY) || "");
+  } catch (_) {}
+  rows.push({ time: totalSec, ts, name: defaultName });
   rows.sort(
     (a, b) => a.time - b.time || (a.ts || 0) - (b.ts || 0)
   );
@@ -313,7 +340,41 @@ function recordRaceFinishTime(totalSec) {
   const idx = next.findIndex((r) => r.ts === ts);
   const rank = idx >= 0 ? idx + 1 : null;
   renderLeaderboard(rank != null ? ts : null);
-  return { rank };
+  return {
+    rank,
+    leaderboardEntryTs: rank != null ? ts : null,
+  };
+}
+
+/**
+ * Updates display name for one saved row (by `ts`) and default for future finishes.
+ * @param {number} ts
+ * @param {string} rawName
+ */
+function updateLeaderboardEntryName(ts, rawName) {
+  const name = sanitizeLeaderboardName(rawName);
+  try {
+    localStorage.setItem(LB_DISPLAY_NAME_KEY, name);
+  } catch (_) {}
+  let list;
+  try {
+    const raw = localStorage.getItem(leaderboardStorageKey());
+    list = raw ? JSON.parse(raw) : [];
+    if (!Array.isArray(list)) list = [];
+  } catch {
+    list = [];
+  }
+  const i = list.findIndex((r) => r && r.ts === ts);
+  if (i < 0) return;
+  list[i] = { ...list[i], name };
+  try {
+    localStorage.setItem(leaderboardStorageKey(), JSON.stringify(list));
+  } catch (_) {}
+  renderLeaderboard(ts);
+  const lbEl = document.getElementById("leaderboard-list-level-select");
+  if (lbEl && levelSelectUid === activeLevelUid) {
+    fillLeaderboardList(lbEl, null, parseLeaderboardForLevelUid(levelSelectUid));
+  }
 }
 
 /** @param finishHighlightTs `row.ts` of this race to highlight on the finish overlay list only; omit/null to clear. */
@@ -346,10 +407,15 @@ function fillLeaderboardList(listEl, highlightTs, dataOverride = null) {
     const rank = document.createElement("span");
     rank.className = "lb-rank";
     rank.textContent = `${i + 1}.`;
+    const nameEl = document.createElement("span");
+    nameEl.className = "lb-name";
+    const rawName = row.name != null ? String(row.name).trim() : "";
+    nameEl.textContent = rawName || "—";
     const timeEl = document.createElement("span");
     timeEl.className = "lb-time";
     timeEl.textContent = formatTime(row.time);
     li.appendChild(rank);
+    li.appendChild(nameEl);
     li.appendChild(timeEl);
     listEl.appendChild(li);
   });
@@ -605,6 +671,8 @@ const COMBAT = {
   CD_CANNON: 0.14,
   CD_MISSILE: 1.1,
   CD_MINE: 0.85,
+  /** Forward plasma (F) — hull damage per hit (before shield). */
+  CANNON_DMG: 18,
   /** Homing missile: fraction of target max HP applied on direct hit (before shield). */
   MISSILE_HP_FRAC: 0.9,
   PROJ_SPEED: 620,
@@ -1046,7 +1114,7 @@ function trySpawnProjectile(car, type) {
       vy: fy * COMBAT.PROJ_SPEED + car.vy * 0.35,
       owner: car,
       type: "cannon",
-      dmg: 9,
+      dmg: COMBAT.CANNON_DMG,
       t: 1.35,
       ignore: 0.06,
     });
@@ -1226,7 +1294,7 @@ function resolveCarCar() {
       const rvy = B.vy - A.vy;
       const rel = Math.abs(rvx * nx + rvy * ny);
       if (rel > 95) {
-        const dmg = rel * 0.018;
+        const dmg = rel * 0.006;
         applyDamage(A, dmg * 0.9, { x: A.x, y: A.y });
         applyDamage(B, dmg * 0.9, { x: B.x, y: B.y });
       }
@@ -1339,12 +1407,14 @@ loadBestLapFromStorage();
 
 function finishScreenRestartRace() {
   if (state.mode !== "finished") return;
+  flushPendingLeaderboardName();
   if (overlayFinishActionsEl) overlayFinishActionsEl.classList.add("hidden");
   startSequence();
 }
 
 function finishScreenGoToMainMenu() {
   if (state.mode !== "finished") return;
+  flushPendingLeaderboardName();
   prepareGridForRaceStart();
   showTitleMenu();
 }
@@ -1353,7 +1423,7 @@ let preRaceCountdownIntervalId = null;
 let preRaceCountdownTimeoutId = null;
 let resumeCountdownIntervalId = null;
 let resumeCountdownTimeoutId = null;
-/** "main" | "audio" | "instructions" | "levels" | "editor" | "options" — nested menu screens */
+/** "main" | "instructions" | "levels" | "editor" | "options" — nested menu screens */
 let menuSubScreen = "main";
 /** When opening the editor from the title screen, Back returns to the title instead of the track list. */
 let trackEditorFromTitle = false;
@@ -1383,6 +1453,8 @@ const overlayHintEl = document.getElementById("overlay-hint");
 const overlayFinishRankEl = document.getElementById("overlay-finish-rank");
 const overlayLeaderboardEl = document.getElementById("overlay-leaderboard");
 const overlayFinishActionsEl = document.getElementById("overlay-finish-actions");
+const overlayLbNameWrapEl = document.getElementById("overlay-lb-name-wrap");
+const overlayLbNameInputEl = document.getElementById("overlay-lb-name-input");
 const countdownEl = document.getElementById("countdown");
 const lapDisplay = document.getElementById("lap-display");
 const currentTimeEl = document.getElementById("current-time");
@@ -1447,8 +1519,7 @@ function syncPauseSliderElements() {
   if (musicVolumeEl) musicVolumeEl.value = String(Math.round(audio.getMusicVolume() * 100));
 }
 
-const btnTitleFullscreenEl = document.getElementById("btn-title-fullscreen");
-const btnPauseFullscreenEl = document.getElementById("btn-pause-fullscreen");
+const btnOptionsFullscreenEl = document.getElementById("btn-options-fullscreen");
 
 async function syncFullscreenButtonLabels() {
   let fs = !!document.fullscreenElement;
@@ -1458,27 +1529,23 @@ async function syncFullscreenButtonLabels() {
     } catch (_) {}
   }
   const label = fs ? "Exit fullscreen" : "Fullscreen";
-  if (btnTitleFullscreenEl) btnTitleFullscreenEl.textContent = label;
-  if (btnPauseFullscreenEl) btnPauseFullscreenEl.textContent = label;
+  if (btnOptionsFullscreenEl) btnOptionsFullscreenEl.textContent = label;
 }
 
 function updateGameMenuPanels() {
   const titlePanel = document.getElementById("menu-panel-title");
   const pausePanel = document.getElementById("menu-panel-pause");
-  const audioPanel = document.getElementById("menu-panel-audio");
   const instructionsPanel = document.getElementById("menu-panel-instructions");
   const optionsPanel = document.getElementById("menu-panel-options");
   const levelPanel = document.getElementById("menu-panel-level-select");
   const editorPanel = document.getElementById("menu-panel-track-editor");
-  if (!titlePanel || !pausePanel || !audioPanel || !instructionsPanel || !optionsPanel)
-    return;
+  if (!titlePanel || !pausePanel || !instructionsPanel || !optionsPanel) return;
   const showTitle =
     state.mode === "title" && state.menuContext === "title" && state.menuOpen;
 
   if (menuSubScreen === "editor") {
     editorPanel?.classList.remove("hidden");
     levelPanel?.classList.add("hidden");
-    audioPanel.classList.add("hidden");
     optionsPanel.classList.add("hidden");
     instructionsPanel.classList.add("hidden");
     titlePanel.classList.add("hidden");
@@ -1489,7 +1556,6 @@ function updateGameMenuPanels() {
 
   if (menuSubScreen === "levels") {
     levelPanel?.classList.remove("hidden");
-    audioPanel.classList.add("hidden");
     optionsPanel.classList.add("hidden");
     instructionsPanel.classList.add("hidden");
     titlePanel.classList.add("hidden");
@@ -1500,16 +1566,6 @@ function updateGameMenuPanels() {
 
   if (menuSubScreen === "options") {
     optionsPanel.classList.remove("hidden");
-    audioPanel.classList.add("hidden");
-    instructionsPanel.classList.add("hidden");
-    titlePanel.classList.add("hidden");
-    pausePanel.classList.add("hidden");
-    return;
-  }
-
-  if (menuSubScreen === "audio") {
-    audioPanel.classList.remove("hidden");
-    optionsPanel.classList.add("hidden");
     instructionsPanel.classList.add("hidden");
     titlePanel.classList.add("hidden");
     pausePanel.classList.add("hidden");
@@ -1518,14 +1574,12 @@ function updateGameMenuPanels() {
 
   if (menuSubScreen === "instructions") {
     instructionsPanel.classList.remove("hidden");
-    audioPanel.classList.add("hidden");
     optionsPanel.classList.add("hidden");
     titlePanel.classList.add("hidden");
     pausePanel.classList.add("hidden");
     return;
   }
 
-  audioPanel.classList.add("hidden");
   optionsPanel.classList.add("hidden");
   instructionsPanel.classList.add("hidden");
   titlePanel.classList.toggle("hidden", !showTitle);
@@ -1534,12 +1588,6 @@ function updateGameMenuPanels() {
 
 function exitMenuSubscreen() {
   menuSubScreen = "main";
-  updateGameMenuPanels();
-}
-
-function showAudioSubmenu() {
-  menuSubScreen = "audio";
-  syncPauseSliderElements();
   updateGameMenuPanels();
 }
 
@@ -1556,6 +1604,8 @@ function syncOptionsUi() {
 function showOptionsSubmenu() {
   menuSubScreen = "options";
   syncOptionsUi();
+  syncPauseSliderElements();
+  void syncFullscreenButtonLabels();
   updateGameMenuPanels();
 }
 
@@ -1834,6 +1884,8 @@ function trySaveAndRaceFromEditor() {
     uid: snap.uid,
   });
   trackCache.delete(uid);
+  populateLevelSelectList();
+  levelSelectUid = uid;
   destroyTrackEditor();
   trackEditorFromTitle = false;
   setActiveLevel(uid);
@@ -1989,6 +2041,26 @@ function showOverlay(title, sub, show = true, hint = "", options = {}) {
       overlayFinishActionsEl.classList.add("hidden");
     } else {
       overlayFinishActionsEl.classList.toggle("hidden", !options.showFinishActions);
+    }
+  }
+  if (overlayLbNameWrapEl) {
+    if (show && options.leaderboardEntryTs != null) {
+      pendingLeaderboardEntryTs = options.leaderboardEntryTs;
+      overlayLbNameWrapEl.classList.remove("hidden");
+      overlayLbNameWrapEl.setAttribute("aria-hidden", "false");
+      if (overlayLbNameInputEl) {
+        const rows = parseLeaderboard();
+        const row = rows.find((r) => r.ts === options.leaderboardEntryTs);
+        const v = row && row.name != null ? String(row.name) : "";
+        overlayLbNameInputEl.value = v;
+        requestAnimationFrame(() => overlayLbNameInputEl?.focus());
+      }
+    } else {
+      flushPendingLeaderboardName();
+      pendingLeaderboardEntryTs = null;
+      overlayLbNameWrapEl.classList.add("hidden");
+      overlayLbNameWrapEl.setAttribute("aria-hidden", "true");
+      if (overlayLbNameInputEl) overlayLbNameInputEl.value = "";
     }
   }
 }
@@ -2320,7 +2392,7 @@ function checkCarLap(car, prev, curr) {
     const totalTime = now - state.raceStartTime;
     state.raceTotalTimeAtFinish = totalTime;
     state.raceElapsedSec = totalTime;
-    const { rank } = recordRaceFinishTime(totalTime);
+    const { rank, leaderboardEntryTs } = recordRaceFinishTime(totalTime);
     showOverlay(
       "Finish!",
       `Total time: ${formatTime(totalTime)}\nBest lap: ${formatTime(state.bestLap)}`,
@@ -2329,6 +2401,7 @@ function checkCarLap(car, prev, curr) {
       {
         showLeaderboard: true,
         finishRank: rank,
+        leaderboardEntryTs,
         showFinishActions: true,
       }
     );
@@ -2395,9 +2468,7 @@ window.addEventListener("keydown", (e) => {
     }
     if (
       state.menuOpen &&
-      (menuSubScreen === "audio" ||
-        menuSubScreen === "instructions" ||
-        menuSubScreen === "options")
+      (menuSubScreen === "instructions" || menuSubScreen === "options")
     ) {
       e.preventDefault();
       exitMenuSubscreen();
@@ -2428,9 +2499,7 @@ window.addEventListener("keydown", (e) => {
   if (e.code === "KeyP" && !e.repeat) {
     if (
       state.menuOpen &&
-      (menuSubScreen === "audio" ||
-        menuSubScreen === "instructions" ||
-        menuSubScreen === "options")
+      (menuSubScreen === "instructions" || menuSubScreen === "options")
     ) {
       e.preventDefault();
       exitMenuSubscreen();
@@ -2445,16 +2514,20 @@ window.addEventListener("keydown", (e) => {
   }
 
   if (e.code === "Space") {
+    const st = /** @type {EventTarget | null} */ (e.target);
+    if (
+      st instanceof HTMLInputElement ||
+      st instanceof HTMLTextAreaElement ||
+      (st instanceof HTMLElement && st.isContentEditable)
+    ) {
+      return;
+    }
     e.preventDefault();
     if (state.menuOpen) {
       if (menuSubScreen === "editor") {
         return;
       }
-      if (
-        menuSubScreen === "audio" ||
-        menuSubScreen === "instructions" ||
-        menuSubScreen === "options"
-      ) {
+      if (menuSubScreen === "instructions" || menuSubScreen === "options") {
         exitMenuSubscreen();
         return;
       }
@@ -2477,7 +2550,7 @@ window.addEventListener("keydown", (e) => {
     !e.repeat &&
     !player.wrecked
   ) {
-    if (e.code === "KeyF") trySpawnProjectile(player, "cannon");
+    if (e.code === "KeyF" || e.code === "Space") trySpawnProjectile(player, "cannon");
     if (e.code === "KeyE") trySpawnProjectile(player, "missile");
     if (e.code === "KeyC") trySpawnProjectile(player, "mine");
   }
@@ -2616,7 +2689,6 @@ if (gameMenuOverlayEl) {
       return;
     }
     if (
-      menuSubScreen === "audio" ||
       menuSubScreen === "instructions" ||
       menuSubScreen === "options"
     ) {
@@ -2692,13 +2764,30 @@ document.getElementById("btn-finish-restart")?.addEventListener("click", () => {
 document.getElementById("btn-finish-main-menu")?.addEventListener("click", () => {
   finishScreenGoToMainMenu();
 });
+overlayLbNameInputEl?.addEventListener("input", () => {
+  if (pendingLeaderboardEntryTs == null || !overlayLbNameInputEl) return;
+  let v = overlayLbNameInputEl.value;
+  if (v.length > LEADERBOARD_NAME_MAX) {
+    v = v.slice(0, LEADERBOARD_NAME_MAX);
+    overlayLbNameInputEl.value = v;
+  }
+  updateLeaderboardEntryName(pendingLeaderboardEntryTs, v);
+});
+overlayLbNameInputEl?.addEventListener("keydown", (e) => {
+  if (e.code !== "Enter") return;
+  e.preventDefault();
+  if (pendingLeaderboardEntryTs == null || !overlayLbNameInputEl) return;
+  flushPendingLeaderboardName();
+  overlayLbNameInputEl.blur();
+});
+overlayLbNameInputEl?.addEventListener("blur", () => {
+  if (pendingLeaderboardEntryTs == null || !overlayLbNameInputEl) return;
+  flushPendingLeaderboardName();
+});
 document.getElementById("btn-title-instructions")?.addEventListener("click", () => showInstructionsSubmenu());
 document.getElementById("btn-pause-instructions")?.addEventListener("click", () => showInstructionsSubmenu());
 document.getElementById("btn-title-options")?.addEventListener("click", () => showOptionsSubmenu());
 document.getElementById("btn-pause-options")?.addEventListener("click", () => showOptionsSubmenu());
-document.getElementById("btn-title-audio")?.addEventListener("click", () => showAudioSubmenu());
-document.getElementById("btn-pause-audio")?.addEventListener("click", () => showAudioSubmenu());
-document.getElementById("btn-audio-back")?.addEventListener("click", () => exitMenuSubscreen());
 document.getElementById("btn-instructions-back")?.addEventListener("click", () => exitMenuSubscreen());
 document.getElementById("btn-options-back")?.addEventListener("click", () => exitMenuSubscreen());
 document.getElementById("opt-show-checkpoints")?.addEventListener("change", (e) => {
@@ -2709,9 +2798,8 @@ document.getElementById("opt-show-checkpoints")?.addEventListener("change", (e) 
   } catch (_) {}
 });
 document
-  .getElementById("btn-title-fullscreen")
+  .getElementById("btn-options-fullscreen")
   ?.addEventListener("click", () => toggleFullscreenGame());
-document.getElementById("btn-pause-fullscreen")?.addEventListener("click", () => toggleFullscreenGame());
 document.getElementById("btn-title-exit")?.addEventListener("click", () => exitGame());
 document.getElementById("btn-pause-main-menu")?.addEventListener("click", () => returnToMainMenuFromPause());
 document.getElementById("btn-resume")?.addEventListener("click", () => resumeFromGameMenu());
