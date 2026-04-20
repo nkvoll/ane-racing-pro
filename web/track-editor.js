@@ -698,7 +698,7 @@ export function initTrackEditor(opts) {
     };
     const safe = name.replace(/[^\w\-]+/g, "_").slice(0, 40) || "track";
     downloadBlob(`${safe}.json`, exportTrackJson(rec));
-    setHint("Downloaded JSON — share this file");
+    setHint("File saved — share this file");
   }
 
   function setMode(m) {
@@ -780,14 +780,14 @@ export function initTrackEditor(opts) {
     points = rec.control.map((p) => ({ x: p.x, y: p.y }));
     closed = true;
     editUid = typeof rec.uid === "string" && rec.uid.startsWith("custom_") ? rec.uid : editUid;
-    if (nameInput) nameInput.value = rec.name || "Imported track";
+    if (nameInput) nameInput.value = rec.name || "Loaded track";
     if (widthInput)
       widthInput.value = String(clamp(parseFloat(String(rec.widthScale ?? 1)) || 1, 0.75, 1.35));
     points = mergeCloseControlRing(points, MERGE_EDGE_MIN);
     selectedIdx = -1;
     fitView();
     scheduleDraw();
-    setHint("Imported — Save to keep a copy on this device");
+    setHint("Loaded — use Save to keep a copy on this device");
   }
 
   function onEditorImportBrowse() {

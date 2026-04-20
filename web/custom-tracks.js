@@ -137,7 +137,7 @@ export function importTrackFromJson(jsonText) {
   }
   return {
     uid: newUid(),
-    name: String(o.name || "Imported track").slice(0, 80),
+    name: String(o.name || "Loaded track").slice(0, 80),
     control: pts,
     subdiv: FIXED_EDGE_SUBDIV,
     widthScale: clamp(Number(o.widthScale ?? 1), 0.75, 1.35),

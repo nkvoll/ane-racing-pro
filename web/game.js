@@ -914,6 +914,8 @@ function respawnCarOnTrack(car) {
   car.prevY = car.y;
   car.trackSegHint = -1;
   car.lastArcPlace = null;
+  /** Must match projection used for steering — old value caused bots to orbit wrong way after wreck / big shunts. */
+  car.aiWp = i;
 }
 
 function spawnParticles(x, y, n, color, spread = 120) {
@@ -1178,7 +1180,7 @@ function updateMines(dt) {
       if (car.wrecked) continue;
       if (car === m.owner && m.armed > 0) continue;
       if (hypot(car.x - m.x, car.y - m.y) < m.r + CAR_R) {
-        applyDamage(car, 32, { x: m.x, y: m.y });
+        applyDamage(car, 24, { x: m.x, y: m.y });
         const oc = m.ownerColor || "#ffd54f";
         spawnParticles(m.x, m.y, 14, oc, 200);
         spawnParticles(m.x, m.y, 10, "#ff1744", 260);
@@ -2181,7 +2183,9 @@ function updateCar(car, dt, input) {
     /** 0 right at green → 1 after a few seconds: eases launch aggression */
     const startEase = clamp(tRace / 2.5, 0, 1);
 
-    const wp = car.aiWp % track.n;
+    distanceAlongTrackForCar(car);
+    car.aiWp = car.trackSegHint;
+    const wp = ((car.aiWp % track.n) + track.n) % track.n;
     const tan0 = track.tangent(wp);
     const across = { x: -tan0.y, y: tan0.x };
     const lateral = car.aiOffset * track.width * (0.09 + 0.07 * startEase);
@@ -2229,17 +2233,14 @@ function updateCar(car, dt, input) {
       throttle *= 1.25;
     }
     throttle *= 0.52 + 0.48 * startEase;
+    const trackForward = car.vx * tan0.x + car.vy * tan0.y;
+    if (trackForward < -30) {
+      throttle *= clamp(1 + trackForward / 130, 0.38, 1);
+    }
     const ax = Math.cos(car.angle) * ACCEL * throttle;
     const ay = Math.sin(car.angle) * ACCEL * throttle;
     car.vx += ax * dt;
     car.vy += ay * dt;
-
-    const cx = track.center[wp].x;
-    const cy = track.center[wp].y;
-    const passDist = 52 + 22 * startEase;
-    if (hypot(cx - car.x, cy - car.y) < passDist) {
-      car.aiWp = (car.aiWp + 1) % track.n;
-    }
   }
 
   const sp = car.speed;
@@ -3014,33 +3015,6 @@ function drawWorld() {
     ctx.restore();
   }
 
-  for (const car of cars) {
-    if (!car.isPlayer) {
-      ctx.save();
-      ctx.translate(car.x, car.y);
-      const hull = car.hp / car.maxHp;
-      const bw = 46;
-      const bh = 7;
-      const yBar = -CAR_R - 20;
-      ctx.fillStyle = "rgba(0,0,0,0.72)";
-      ctx.fillRect(-bw / 2, yBar, bw, bh);
-      if (!car.wrecked) {
-        ctx.fillStyle =
-          hull > 0.55 ? "#7cff7c" : hull > 0.28 ? "#ffd54f" : "#e53935";
-        ctx.fillRect(-bw / 2, yBar, bw * clamp(hull, 0, 1), bh);
-      }
-      ctx.strokeStyle = "rgba(255,255,255,0.5)";
-      ctx.lineWidth = 1 / z;
-      ctx.strokeRect(-bw / 2, yBar, bw, bh);
-      ctx.font = `${10 / z}px Orbitron,sans-serif`;
-      ctx.fillStyle = "rgba(255,255,255,0.9)";
-      ctx.textAlign = "center";
-      ctx.textBaseline = "bottom";
-      ctx.fillText(car.wrecked ? "0" : `${Math.round(car.hp)}`, 0, yBar - 3 / z);
-      ctx.restore();
-    }
-  }
-
   // Cars
   for (const car of cars) {
     ctx.save();
@@ -3060,25 +3034,17 @@ function drawWorld() {
     ctx.fillStyle = car.isPlayer ? "#000000" : "#111111";
     ctx.fillRect(-18, -10, 36, 20);
 
-    if (car.isPlayer) {
-      const h = clamp(hullFrac, 0, 1);
-      if (h > 0.003) {
-        ctx.save();
-        ctx.beginPath();
-        /* Hull infill: rear (−x) → front (+x), like a bar along the car */
-        ctx.rect(rx - 0.5, ry - 0.5, rw * h + 0.5, rh + 1);
-        ctx.clip();
-        carBodyPath(ctx, rx, ry, rw, rh, rr);
-        ctx.fillStyle = car.color;
-        ctx.fill();
-        ctx.restore();
-      }
-    } else {
-      ctx.globalAlpha = hullFrac < 0.35 ? 0.72 : 1;
+    const h = clamp(hullFrac, 0, 1);
+    if (h > 0.003) {
+      ctx.save();
+      ctx.beginPath();
+      /* Hull infill: rear (−x) → front (+x), like a bar along the car */
+      ctx.rect(rx - 0.5, ry - 0.5, rw * h + 0.5, rh + 1);
+      ctx.clip();
       carBodyPath(ctx, rx, ry, rw, rh, rr);
       ctx.fillStyle = car.color;
       ctx.fill();
-      ctx.globalAlpha = 1;
+      ctx.restore();
     }
 
     ctx.fillStyle = "rgba(0,0,0,0.35)";

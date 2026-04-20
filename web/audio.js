@@ -7,6 +7,10 @@ let masterGain = null;
 /** All SFX route through this so volume slider affects sound effects only. */
 let sfxBus = null;
 let musicGain = null;
+/** Voices → DC cut → treble softening → gentle dynamics → music fader. */
+let musicHp = null;
+let musicLp = null;
+let musicComp = null;
 /* Scaled by music slider 0–1; was ~0.12 (too quiet vs SFX). */
 const BASE_MUSIC_GAIN = 0.4;
 let sfxVolume = 1;
@@ -28,6 +32,23 @@ export function ensureAudio() {
     sfxBus.connect(masterGain);
     musicGain = ctx.createGain();
     musicGain.gain.value = musicVolume * BASE_MUSIC_GAIN;
+    musicHp = ctx.createBiquadFilter();
+    musicHp.type = "highpass";
+    musicHp.frequency.value = 30;
+    musicHp.Q.value = 0.707;
+    musicLp = ctx.createBiquadFilter();
+    musicLp.type = "lowpass";
+    musicLp.frequency.value = 10800;
+    musicLp.Q.value = 0.707;
+    musicComp = ctx.createDynamicsCompressor();
+    musicComp.threshold.value = -22;
+    musicComp.knee.value = 36;
+    musicComp.ratio.value = 2.2;
+    musicComp.attack.value = 0.015;
+    musicComp.release.value = 0.22;
+    musicHp.connect(musicLp);
+    musicLp.connect(musicComp);
+    musicComp.connect(musicGain);
     musicGain.connect(masterGain);
   }
   if (ctx.state === "suspended") {
@@ -72,6 +93,73 @@ function noiseBuffer(duration) {
     d[i] = (Math.random() * 2 - 1) * (1 - i / len);
   }
   return buf;
+}
+
+/** Hann-windowed noise: starts and ends at 0 → no edge discontinuity when gain opens (hi-hat ticks). */
+function windowedNoiseBuffer(duration) {
+  const c = ensureAudio();
+  const len = Math.max(8, Math.floor(c.sampleRate * duration));
+  const buf = c.createBuffer(1, len, c.sampleRate);
+  const d = buf.getChannelData(0);
+  const last = len - 1;
+  for (let i = 0; i < len; i++) {
+    const win = 0.5 - 0.5 * Math.cos((2 * Math.PI * i) / last);
+    d[i] = (Math.random() * 2 - 1) * win;
+  }
+  return buf;
+}
+
+function connectMusicVoice(gainNode) {
+  ensureAudio();
+  gainNode.connect(musicHp);
+}
+
+/** Raised-cosine segments, starts/ends at 0 — no corners vs linear ramps (fewer tick artifacts). */
+function buildNoteGainCurve(vol, durSec) {
+  const c = ensureAudio();
+  let atk = Math.min(0.02, durSec * 0.28);
+  let rel = Math.min(0.055, durSec * 0.38);
+  if (atk + rel > durSec * 0.98) {
+    const s = (durSec * 0.98) / (atk + rel);
+    atk *= s;
+    rel *= s;
+  }
+  const sustain = Math.max(0, durSec - atk - rel);
+  const totalDur = atk + sustain + rel;
+  const nRaw = Math.ceil(totalDur * c.sampleRate * 1.25);
+  const n = Math.min(512, Math.max(64, nRaw));
+  const curve = new Float32Array(n);
+  const denom = Math.max(1, n - 1);
+  for (let i = 0; i < n; i++) {
+    const x = (i / denom) * totalDur;
+    let env;
+    if (atk > 0 && x <= atk) {
+      env = 0.5 - 0.5 * Math.cos((Math.PI * x) / atk);
+    } else if (x <= atk + sustain) {
+      env = 1;
+    } else if (rel > 0) {
+      const r = (x - atk - sustain) / rel;
+      env = 0.5 + 0.5 * Math.cos(Math.PI * Math.min(1, Math.max(0, r)));
+    } else {
+      env = 0;
+    }
+    curve[i] = vol * env;
+  }
+  return { curve, totalDur };
+}
+
+/** Sin² bump, zero at ends — smooth hi-hat amplitude. */
+function buildHatGainCurve(peak, totalDur) {
+  const c = ensureAudio();
+  const n = Math.min(96, Math.max(16, Math.ceil(totalDur * c.sampleRate * 0.6)));
+  const curve = new Float32Array(Math.max(2, n));
+  const denom = Math.max(1, curve.length - 1);
+  for (let i = 0; i < curve.length; i++) {
+    const u = i / denom;
+    const h = Math.sin(Math.PI * u);
+    curve[i] = peak * h * h;
+  }
+  return { curve, totalDur };
 }
 
 export function playCannon() {
@@ -190,9 +278,14 @@ export function playLap() {
   o.stop(c.currentTime + 0.4);
 }
 
-const BASS_SEQ = [48, 48, 55, 52, 50, 57, 55, 52, 53, 60, 57, 55, 52, 57, 60, 64];
+/** 32 steps ≈ 5.4 s per loop at MUSIC_STEP (longer phrase, less frequent seam). */
+const BASS_SEQ = [
+  48, 48, 55, 52, 50, 57, 55, 52, 53, 60, 57, 55, 52, 57, 60, 64,
+  62, 60, 57, 55, 53, 55, 57, 60, 57, 55, 53, 52, 50, 53, 55, 48,
+];
 const LEAD_SEQ = [
   72, 74, 76, 79, 77, 76, 74, 72, 74, 76, 79, 81, 79, 77, 76, 74,
+  76, 77, 79, 81, 79, 77, 76, 74, 72, 74, 76, 77, 76, 74, 72, 72,
 ];
 function midiToHz(m) {
   return 440 * Math.pow(2, (m - 69) / 12);
@@ -200,35 +293,43 @@ function midiToHz(m) {
 
 function playMusicNote(freq, type, vol, dur, when) {
   const c = ensureAudio();
-  const t = Math.max(when, c.currentTime + 0.005);
+  const t = Math.max(when, c.currentTime + 0.025);
+  const { curve, totalDur } = buildNoteGainCurve(vol, dur);
   const o = c.createOscillator();
   const g = c.createGain();
   o.type = type;
   o.frequency.value = freq;
-  g.gain.setValueAtTime(vol, t);
-  g.gain.exponentialRampToValueAtTime(0.001, t + dur);
+  g.gain.cancelScheduledValues(t);
+  g.gain.setValueAtTime(0, t);
+  g.gain.setValueCurveAtTime(curve, t, totalDur);
   o.connect(g);
-  g.connect(musicGain);
+  connectMusicVoice(g);
   o.start(t);
-  o.stop(t + dur + 0.02);
+  o.stop(t + totalDur + 0.04);
 }
 
 function playHiHat(when) {
   const c = ensureAudio();
-  const t = Math.max(when, c.currentTime + 0.005);
-  const buf = noiseBuffer(0.04);
+  const t = Math.max(when, c.currentTime + 0.025);
+  const buf = windowedNoiseBuffer(0.042);
+  const bufDur = buf.duration;
   const src = c.createBufferSource();
   const g = c.createGain();
   const f = c.createBiquadFilter();
-  f.type = "highpass";
-  f.frequency.value = 7000;
+  f.type = "bandpass";
+  f.frequency.value = 8800;
+  f.Q.value = 0.7;
   src.buffer = buf;
   src.connect(f);
   f.connect(g);
-  g.gain.setValueAtTime(0.045, t);
-  g.gain.exponentialRampToValueAtTime(0.001, t + 0.035);
-  g.connect(musicGain);
+  const envDur = Math.min(bufDur * 0.94, 0.04);
+  const { curve, totalDur } = buildHatGainCurve(0.031, envDur);
+  g.gain.cancelScheduledValues(t);
+  g.gain.setValueAtTime(0, t);
+  g.gain.setValueCurveAtTime(curve, t, totalDur);
+  connectMusicVoice(g);
   src.start(t);
+  src.stop(t + bufDur);
 }
 
 export function updateMusic(dt) {
@@ -237,23 +338,28 @@ export function updateMusic(dt) {
   hatAcc += dt;
   const hatStep = MUSIC_STEP * 0.5;
 
+  let musicCatchUp = 0;
   while (musicAcc >= MUSIC_STEP) {
     musicAcc -= MUSIC_STEP;
     const t0 = c.currentTime;
     const i = musicPhase % BASS_SEQ.length;
-    const tb = t0 + 0.02;
-    playMusicNote(midiToHz(BASS_SEQ[i]), "triangle", 0.2, 0.2, tb);
+    const tb = t0 + 0.02 + musicCatchUp * MUSIC_STEP;
+    musicCatchUp++;
+    /* Slightly shorter bass vs step interval + staggered catch-up avoids stacked peaks (clipping). */
+    playMusicNote(midiToHz(BASS_SEQ[i]), "triangle", 0.15, 0.15, tb);
     if (musicPhase % 2 === 0) {
-      playMusicNote(midiToHz(LEAD_SEQ[i]), "sine", 0.09, 0.14, tb + 0.01);
+      playMusicNote(midiToHz(LEAD_SEQ[i]), "sine", 0.075, 0.13, tb + 0.01);
     }
     if (musicPhase % 4 === 2) {
-      playMusicNote(midiToHz(LEAD_SEQ[(i + 4) % LEAD_SEQ.length]) * 0.5, "triangle", 0.06, 0.12, tb);
+      playMusicNote(midiToHz(LEAD_SEQ[(i + 4) % LEAD_SEQ.length]) * 0.5, "triangle", 0.05, 0.11, tb);
     }
     musicPhase++;
   }
 
+  let hatCatchUp = 0;
   while (hatAcc >= hatStep) {
     hatAcc -= hatStep;
-    playHiHat(c.currentTime);
+    playHiHat(c.currentTime + hatCatchUp * hatStep);
+    hatCatchUp++;
   }
 }

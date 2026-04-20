@@ -4,8 +4,10 @@
   "description": "Ane Racing PRO — desktop arcade racer",
   "main": "electron/main.cjs",
   "private": true,
-  "author": "Ane Racing contributors",
-  "email": "njal@karevoll.no",
+  "author": {
+    "name": "Ane Racing contributors",
+    "email": "njal@karevoll.no"
+  },
   "license": "MIT",
   "engines": {
     "node": ">=25.9.0"
