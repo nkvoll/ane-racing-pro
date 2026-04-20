@@ -4,6 +4,15 @@
 
 import * as audio from "./audio.js";
 import { LEVELS, getLevelByUid, getLevelBySlug } from "./tracks.js";
+import {
+  loadCustomTracks,
+  createCustomTrack,
+  deleteCustomTrack,
+  importTrackFromJson,
+  upsertCustomTrack,
+} from "./custom-tracks.js";
+import { initTrackEditor } from "./track-editor.js";
+import { buildTrackLayout, distPointSegment, TRACK_WIDTH } from "./track-geometry.js";
 
 const TAU = Math.PI * 2;
 
@@ -36,68 +45,6 @@ function hexDarken(hex, t = 0.5) {
   return `rgb(${r},${g},${b})`;
 }
 
-function catmullRom(p0, p1, p2, p3, t) {
-  const t2 = t * t;
-  const t3 = t2 * t;
-  return {
-    x:
-      0.5 *
-      (2 * p1.x +
-        (-p0.x + p2.x) * t +
-        (2 * p0.x - 5 * p1.x + 4 * p2.x - p3.x) * t2 +
-        (-p0.x + 3 * p1.x - 3 * p2.x + p3.x) * t3),
-    y:
-      0.5 *
-      (2 * p1.y +
-        (-p0.y + p2.y) * t +
-        (2 * p0.y - 5 * p1.y + 4 * p2.y - p3.y) * t2 +
-        (-p0.y + 3 * p1.y - 3 * p2.y + p3.y) * t3),
-  };
-}
-
-function buildClosedSpline(control, subdiv) {
-  const n = control.length;
-  const pts = [];
-  for (let i = 0; i < n; i++) {
-    const p0 = control[(i - 1 + n) % n];
-    const p1 = control[i];
-    const p2 = control[(i + 1) % n];
-    const p3 = control[(i + 2) % n];
-    for (let s = 0; s < subdiv; s++) {
-      const t = s / subdiv;
-      pts.push(catmullRom(p0, p1, p2, p3, t));
-    }
-  }
-  return pts;
-}
-
-function rotateClosedPolyline(pts, k) {
-  const n = pts.length;
-  if (n === 0) return pts;
-  k = ((k % n) + n) % n;
-  if (k === 0) return pts.slice();
-  return [...pts.slice(k), ...pts.slice(0, k)];
-}
-
-/** Index of the vertex at the start of the longest edge (best straight for S/F and wall health). */
-function findLongestEdgeStartIndex(center) {
-  const n = center.length;
-  let bestI = 0;
-  let bestLen = -1;
-  for (let i = 0; i < n; i++) {
-    const j = (i + 1) % n;
-    const len = hypot(
-      center[j].x - center[i].x,
-      center[j].y - center[i].y
-    );
-    if (len > bestLen) {
-      bestLen = len;
-      bestI = i;
-    }
-  }
-  return bestI;
-}
-
 function segmentIntersect(p1, p2, p3, p4) {
   const d = (p1.x - p2.x) * (p3.y - p4.y) - (p1.y - p2.y) * (p3.x - p4.x);
   if (Math.abs(d) < 1e-9) return null;
@@ -111,25 +58,10 @@ function segmentIntersect(p1, p2, p3, p4) {
   return null;
 }
 
-function distPointSegment(px, py, ax, ay, bx, by) {
-  const abx = bx - ax;
-  const aby = by - ay;
-  const apx = px - ax;
-  const apy = py - ay;
-  const ab2 = abx * abx + aby * aby;
-  let t = ab2 > 0 ? (apx * abx + apy * aby) / ab2 : 0;
-  t = clamp(t, 0, 1);
-  const qx = ax + abx * t;
-  const qy = ay + aby * t;
-  return hypot(px - qx, py - qy);
-}
-
 function circleHitsSegment(cx, cy, r, ax, ay, bx, by) {
   return distPointSegment(cx, cy, ax, ay, bx, by) < r;
 }
 
-const DEFAULT_SUBDIV = 14;
-const TRACK_WIDTH = 162;
 const CAR_R = 16;
 
 class Track {
@@ -138,96 +70,16 @@ class Track {
    * @param {{ subdiv?: number, trackWidth?: number }} [opts]
    */
   constructor(control, opts = {}) {
-    const subdiv = opts.subdiv != null ? opts.subdiv : DEFAULT_SUBDIV;
-    const raw = buildClosedSpline(control, subdiv);
-    const rot = findLongestEdgeStartIndex(raw);
-    this.center = rotateClosedPolyline(raw, rot);
-    this.n = this.center.length;
-    this.width = opts.trackWidth != null ? opts.trackWidth : TRACK_WIDTH;
-    this.inner = [];
-    this.outer = [];
-    this.wallSegments = [];
-
-    for (let i = 0; i < this.n; i++) {
-      const p0 = this.center[(i - 1 + this.n) % this.n];
-      const p1 = this.center[i];
-      const p2 = this.center[(i + 1) % this.n];
-      let tx = p2.x - p0.x;
-      let ty = p2.y - p0.y;
-      const len = hypot(tx, ty) || 1;
-      tx /= len;
-      ty /= len;
-      const nx = -ty;
-      const ny = tx;
-      const hw = this.width * 0.5;
-      this.outer.push({ x: p1.x + nx * hw, y: p1.y + ny * hw });
-      this.inner.push({ x: p1.x - nx * hw, y: p1.y - ny * hw });
-    }
-
-    for (let i = 0; i < this.n; i++) {
-      const j = (i + 1) % this.n;
-      this.wallSegments.push(
-        { a: this.outer[i], b: this.outer[j], inner: false },
-        { a: this.inner[i], b: this.inner[j], inner: true }
-      );
-    }
-
-    // Start / finish: perpendicular at index 0 (after rotation = start of longest straight).
-    const t0 = this.tangent(0);
-    const nx = -t0.y;
-    const ny = t0.x;
-    const hw = this.width * 0.5;
-    const c0 = this.center[0];
-    // Slightly wider than kerbs so the line spans the full drivable width even if normals wobble.
-    const fw = hw * 1.12;
-    this.finishLine = {
-      a: { x: c0.x + nx * fw, y: c0.y + ny * fw },
-      b: { x: c0.x - nx * fw, y: c0.y - ny * fw },
-      tangent: { x: t0.x, y: t0.y },
-    };
-
-    // Sector: must sit on a wide part of the road. Half-lap vertices can land on tight inner
-    // corners where offset wall *chords* cut across the centerline — pick max clearance to walls.
-    const cumLen = [];
-    let acc = 0;
-    for (let i = 0; i < this.n; i++) {
-      cumLen.push(acc);
-      const j = (i + 1) % this.n;
-      acc += hypot(
-        this.center[j].x - this.center[i].x,
-        this.center[j].y - this.center[i].y
-      );
-    }
-    this.length = acc;
-
-    const L = this.length;
-    const lo = L * 0.38;
-    const hi = L * 0.62;
-    let bestMidI = Math.floor(this.n * 0.5) % this.n;
-    let bestClear = -1;
-    for (let i = 0; i < this.n; i++) {
-      const s = cumLen[i];
-      if (s < lo || s > hi) continue;
-      const px = this.center[i].x;
-      const py = this.center[i].y;
-      let dmin = Infinity;
-      for (const seg of this.wallSegments) {
-        dmin = Math.min(
-          dmin,
-          distPointSegment(px, py, seg.a.x, seg.a.y, seg.b.x, seg.b.y)
-        );
-      }
-      if (dmin > bestClear) {
-        bestClear = dmin;
-        bestMidI = i;
-      }
-    }
-
-    this.midCheckpoint = {
-      x: this.center[bestMidI].x,
-      y: this.center[bestMidI].y,
-      r: this.width * 1.2,
-    };
+    const g = buildTrackLayout(control, opts);
+    this.center = g.center;
+    this.n = g.n;
+    this.width = g.width;
+    this.inner = g.inner;
+    this.outer = g.outer;
+    this.wallSegments = g.wallSegments;
+    this.finishLine = g.finishLine;
+    this.midCheckpoint = g.midCheckpoint;
+    this.length = g.length;
   }
 
   tangent(i) {
@@ -242,11 +94,48 @@ class Track {
 
 const trackCache = new Map();
 
+/** @param {string} uid */
+function findCustomRecord(uid) {
+  return loadCustomTracks().find((t) => t.uid === uid);
+}
+
+/** @param {{ uid: string, name: string, control: {x:number,y:number}[], subdiv?: number, widthScale?: number }} rec */
+function customRecordToLevelDef(rec) {
+  const ctrl = rec.control.map((p) => ({ x: p.x, y: p.y }));
+  return {
+    uid: rec.uid,
+    id: "custom",
+    name: rec.name,
+    tagline: "Custom · drawn track",
+    subdiv: rec.subdiv ?? 14,
+    widthScale: rec.widthScale ?? 1,
+    buildControl() {
+      return ctrl.map((p) => ({ x: p.x, y: p.y }));
+    },
+  };
+}
+
+/** Built-in or saved custom layout (same shape as `tracks.js` LevelDef). */
+function getLevelDef(uid) {
+  const rec = findCustomRecord(uid);
+  if (rec) return customRecordToLevelDef(rec);
+  return getLevelByUid(uid);
+}
+
+function isCustomTrackUid(uid) {
+  return (
+    typeof uid === "string" &&
+    uid.startsWith("custom_") &&
+    Boolean(findCustomRecord(uid))
+  );
+}
+
 /** Resolve persisted menu selection: UUID, legacy slug `id`, or legacy numeric index. */
 function resolveStoredLevelUid(stored) {
   if (stored == null || stored === "") return LEVELS[0].uid;
   const s = String(stored).trim();
   if (LEVELS.some((L) => L.uid === s)) return s;
+  if (findCustomRecord(s)) return s;
   const bySlug = getLevelBySlug(s);
   if (bySlug) return bySlug.uid;
   const n = parseInt(s, 10);
@@ -263,7 +152,7 @@ function readInitialLevelUid() {
 }
 
 function buildTrackForLevel(levelUid) {
-  const def = getLevelByUid(levelUid);
+  const def = getLevelDef(levelUid);
   const control = def.buildControl();
   const tw = TRACK_WIDTH * (def.widthScale ?? 1);
   if (!trackCache.has(def.uid)) {
@@ -334,7 +223,7 @@ function leaderboardStorageKey() {
 
 function parseLeaderboardForLevelUid(levelUid) {
   try {
-    const def = getLevelByUid(levelUid);
+    const def = getLevelDef(levelUid);
     let raw = localStorage.getItem(`aneRacingTop10_${def.uid}`);
     if (!raw) {
       raw = localStorage.getItem(`aneRacingTop10_${def.id}`);
@@ -1311,7 +1200,7 @@ const state = {
 };
 
 function loadBestLapFromStorage() {
-  const def = getLevelByUid(activeLevelUid);
+  const def = getLevelDef(activeLevelUid);
   let v = localStorage.getItem(`aneRacingBestLap_${def.uid}`);
   if (v == null) {
     v = localStorage.getItem(`aneRacingBestLap_${def.id}`);
@@ -1329,7 +1218,7 @@ function loadBestLapFromStorage() {
  */
 function setActiveLevel(levelUid, options = {}) {
   const { repositionCars = true, snapCamera = true } = options;
-  activeLevelUid = getLevelByUid(levelUid).uid;
+  activeLevelUid = getLevelDef(levelUid).uid;
   track = buildTrackForLevel(activeLevelUid);
   recomputeGridSlots();
   try {
@@ -1363,8 +1252,12 @@ let preRaceCountdownIntervalId = null;
 let preRaceCountdownTimeoutId = null;
 let resumeCountdownIntervalId = null;
 let resumeCountdownTimeoutId = null;
-/** "main" | "audio" | "instructions" | "levels" — nested menu screens */
+/** "main" | "audio" | "instructions" | "levels" | "editor" — nested menu screens */
 let menuSubScreen = "main";
+/** When opening the editor from the title screen, Back returns to the title instead of the track list. */
+let trackEditorFromTitle = false;
+/** @type {{ destroy: () => void, getSnapshot?: () => object } | null} */
+let trackEditorApi = null;
 /** Highlighted level in the picker (stable UUID, not list index). */
 let levelSelectUid = LEVELS[0].uid;
 
@@ -1460,9 +1353,21 @@ function updateGameMenuPanels() {
   const audioPanel = document.getElementById("menu-panel-audio");
   const instructionsPanel = document.getElementById("menu-panel-instructions");
   const levelPanel = document.getElementById("menu-panel-level-select");
+  const editorPanel = document.getElementById("menu-panel-track-editor");
   if (!titlePanel || !pausePanel || !audioPanel || !instructionsPanel) return;
   const showTitle =
     state.mode === "title" && state.menuContext === "title" && state.menuOpen;
+
+  if (menuSubScreen === "editor") {
+    editorPanel?.classList.remove("hidden");
+    levelPanel?.classList.add("hidden");
+    audioPanel.classList.add("hidden");
+    instructionsPanel.classList.add("hidden");
+    titlePanel.classList.add("hidden");
+    pausePanel.classList.add("hidden");
+    return;
+  }
+  editorPanel?.classList.add("hidden");
 
   if (menuSubScreen === "levels") {
     levelPanel?.classList.remove("hidden");
@@ -1558,6 +1463,8 @@ function startResumeRaceCountdown(afterGo) {
 }
 
 function showTitleMenu() {
+  destroyTrackEditor();
+  trackEditorFromTitle = false;
   menuSubScreen = "main";
   clearPreRaceCountdown();
   clearResumeRaceCountdown();
@@ -1664,11 +1571,15 @@ function drawTrackPreviewCanvas(cnv, levelUid) {
 function syncLevelSelectUi() {
   const big = document.getElementById("level-preview-canvas");
   drawTrackPreviewCanvas(big, levelSelectUid);
-  const L = getLevelByUid(levelSelectUid);
+  const L = getLevelDef(levelSelectUid);
   const nameEl = document.getElementById("level-preview-name");
   const tagEl = document.getElementById("level-preview-tag");
   if (nameEl) nameEl.textContent = L.name;
   if (tagEl) tagEl.textContent = L.tagline;
+  const customAct = document.getElementById("level-select-custom-actions");
+  if (customAct) {
+    customAct.classList.toggle("hidden", !isCustomTrackUid(levelSelectUid));
+  }
   const lbEl = document.getElementById("leaderboard-list-level-select");
   if (lbEl) {
     fillLeaderboardList(lbEl, null, parseLeaderboardForLevelUid(levelSelectUid));
@@ -1683,10 +1594,10 @@ function populateLevelSelectList() {
   const container = document.getElementById("level-select-list");
   if (!container) return;
   container.innerHTML = "";
-  LEVELS.forEach((Lv) => {
+  function addRow(Lv, extraClass = "") {
     const row = document.createElement("button");
     row.type = "button";
-    row.className = "level-select-row";
+    row.className = "level-select-row" + (extraClass ? ` ${extraClass}` : "");
     row.setAttribute("data-level-uid", Lv.uid);
     row.innerHTML =
       '<canvas class="level-thumb-canvas" width="112" height="72" aria-hidden="true"></canvas>' +
@@ -1701,7 +1612,128 @@ function populateLevelSelectList() {
     container.appendChild(row);
     const thumb = row.querySelector(".level-thumb-canvas");
     drawTrackPreviewCanvas(thumb, Lv.uid);
+  }
+  function escHtml(s) {
+    return String(s)
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;");
+  }
+  LEVELS.forEach((Lv) => addRow(Lv));
+  loadCustomTracks().forEach((rec) => {
+    const def = customRecordToLevelDef(rec);
+    const row = document.createElement("button");
+    row.type = "button";
+    row.className = "level-select-row level-select-row--custom";
+    row.setAttribute("data-level-uid", def.uid);
+    row.innerHTML =
+      '<canvas class="level-thumb-canvas" width="112" height="72" aria-hidden="true"></canvas>' +
+      '<span class="level-select-row-text">' +
+      `<span class="level-select-row-name">${escHtml(def.name)}</span>` +
+      `<span class="level-select-row-tag">${escHtml(def.tagline)}</span>` +
+      "</span>";
+    row.addEventListener("click", () => {
+      levelSelectUid = def.uid;
+      syncLevelSelectUi();
+    });
+    container.appendChild(row);
+    const thumb = row.querySelector(".level-thumb-canvas");
+    drawTrackPreviewCanvas(thumb, def.uid);
   });
+}
+
+function destroyTrackEditor() {
+  if (trackEditorApi?.destroy) {
+    trackEditorApi.destroy();
+  }
+  trackEditorApi = null;
+}
+
+function closeTrackEditorFromBack() {
+  destroyTrackEditor();
+  if (trackEditorFromTitle) {
+    menuSubScreen = "main";
+  } else {
+    menuSubScreen = "levels";
+    populateLevelSelectList();
+    syncLevelSelectUi();
+  }
+  trackEditorFromTitle = false;
+  updateGameMenuPanels();
+}
+
+function finishTrackEditorSave(uid) {
+  trackCache.delete(uid);
+  destroyTrackEditor();
+  trackEditorFromTitle = false;
+  menuSubScreen = "levels";
+  populateLevelSelectList();
+  levelSelectUid = uid;
+  syncLevelSelectUi();
+  updateGameMenuPanels();
+}
+
+/**
+ * @param {object | null | undefined} initial
+ * @param {{ fromTitle?: boolean }} [opts]
+ */
+function openTrackEditor(initial, opts = {}) {
+  destroyTrackEditor();
+  trackEditorFromTitle = Boolean(opts.fromTitle);
+  menuSubScreen = "editor";
+  state.menuOpen = true;
+  state.menuContext = "title";
+  updateGameMenuPanels();
+  const canvas = /** @type {HTMLCanvasElement | null} */ (
+    document.getElementById("track-editor-canvas")
+  );
+  if (!canvas || !gameMenuOverlayEl) {
+    menuSubScreen = trackEditorFromTitle ? "main" : "levels";
+    trackEditorFromTitle = false;
+    updateGameMenuPanels();
+    return;
+  }
+  applyGameMenuOverlay(gameMenuOverlayEl);
+  syncPauseSliderElements();
+  trackEditorApi = initTrackEditor({
+    canvas,
+    initial: initial || undefined,
+    onClose: () => {
+      closeTrackEditorFromBack();
+    },
+    onSave: ({ name, control, subdiv, widthScale, uid }) => {
+      const outUid = createCustomTrack({ name, control, subdiv, widthScale, uid });
+      finishTrackEditorSave(outUid);
+    },
+  });
+}
+
+function trySaveAndRaceFromEditor() {
+  if (!trackEditorApi?.getSnapshot) return;
+  const snap = trackEditorApi.getSnapshot();
+  if (!snap.valid) return;
+  const uid = createCustomTrack({
+    name: snap.name,
+    control: snap.control,
+    subdiv: snap.subdiv,
+    widthScale: snap.widthScale,
+    uid: snap.uid,
+  });
+  trackCache.delete(uid);
+  destroyTrackEditor();
+  trackEditorFromTitle = false;
+  setActiveLevel(uid);
+  startSequence();
+}
+
+function importTrackFromFileText(text) {
+  const rec = importTrackFromJson(text);
+  upsertCustomTrack(rec);
+  trackCache.delete(rec.uid);
+  populateLevelSelectList();
+  levelSelectUid = rec.uid;
+  syncLevelSelectUi();
 }
 
 function showLevelSelectMenu() {
@@ -2140,7 +2172,7 @@ function checkCarLap(car, prev, curr) {
   state.lastLapTime = lapTime;
   if (state.bestLap == null || lapTime < state.bestLap) {
     state.bestLap = lapTime;
-    const def = getLevelByUid(activeLevelUid);
+    const def = getLevelDef(activeLevelUid);
     try {
       localStorage.setItem(`aneRacingBestLap_${def.uid}`, String(lapTime));
       if (def.id === LEVELS[0].id) {
@@ -2192,6 +2224,11 @@ window.addEventListener("keydown", (e) => {
   if (e.code === "ShiftLeft" || e.code === "ShiftRight") keys.handbrake = true;
 
   if (e.code === "Escape") {
+    if (state.menuOpen && menuSubScreen === "editor") {
+      e.preventDefault();
+      closeTrackEditorFromBack();
+      return;
+    }
     if (state.menuOpen && (menuSubScreen === "audio" || menuSubScreen === "instructions")) {
       e.preventDefault();
       exitMenuSubscreen();
@@ -2236,6 +2273,9 @@ window.addEventListener("keydown", (e) => {
   if (e.code === "Space") {
     e.preventDefault();
     if (state.menuOpen) {
+      if (menuSubScreen === "editor") {
+        return;
+      }
       if (menuSubScreen === "audio" || menuSubScreen === "instructions") {
         exitMenuSubscreen();
         return;
@@ -2391,6 +2431,10 @@ if (musicVolumeEl) {
 if (gameMenuOverlayEl) {
   gameMenuOverlayEl.addEventListener("click", (e) => {
     if (e.target !== gameMenuOverlayEl) return;
+    if (menuSubScreen === "editor") {
+      closeTrackEditorFromBack();
+      return;
+    }
     if (menuSubScreen === "audio" || menuSubScreen === "instructions") {
       exitMenuSubscreen();
       return;
@@ -2407,6 +2451,57 @@ if (gameMenuOverlayEl) {
 
 document.getElementById("btn-new-game")?.addEventListener("click", () => {
   if (state.mode === "title") showLevelSelectMenu();
+});
+document.getElementById("btn-title-track-editor")?.addEventListener("click", () => {
+  if (state.mode === "title") openTrackEditor(null, { fromTitle: true });
+});
+document.getElementById("btn-level-create-track")?.addEventListener("click", () => {
+  if (menuSubScreen === "levels" && state.mode === "title") {
+    openTrackEditor(null, { fromTitle: false });
+  }
+});
+document.getElementById("btn-level-import")?.addEventListener("click", () => {
+  document.getElementById("track-import-file")?.click();
+});
+document.getElementById("track-import-file")?.addEventListener("change", (e) => {
+  const input = /** @type {HTMLInputElement} */ (e.target);
+  const f = input.files?.[0];
+  if (!f) return;
+  const reader = new FileReader();
+  reader.onload = () => {
+    try {
+      importTrackFromFileText(String(reader.result || ""));
+    } catch (err) {
+      const msg = err && typeof err === "object" && "message" in err ? err.message : String(err);
+      window.alert(msg);
+    }
+    input.value = "";
+  };
+  reader.readAsText(f);
+});
+document.getElementById("btn-level-edit-track")?.addEventListener("click", () => {
+  if (menuSubScreen !== "levels") return;
+  const rec = findCustomRecord(levelSelectUid);
+  if (!rec) return;
+  openTrackEditor(rec, { fromTitle: false });
+});
+document.getElementById("btn-level-delete-track")?.addEventListener("click", () => {
+  if (menuSubScreen !== "levels" || !isCustomTrackUid(levelSelectUid)) return;
+  const L = getLevelDef(levelSelectUid);
+  if (!window.confirm(`Delete "${L.name}"? This removes it from your device.`)) return;
+  const removed = levelSelectUid;
+  deleteCustomTrack(removed);
+  trackCache.delete(removed);
+  populateLevelSelectList();
+  levelSelectUid = LEVELS[0].uid;
+  if (activeLevelUid === removed) {
+    setActiveLevel(LEVELS[0].uid);
+  }
+  syncLevelSelectUi();
+});
+document.getElementById("track-editor-save-race")?.addEventListener("click", () => {
+  if (menuSubScreen !== "editor") return;
+  trySaveAndRaceFromEditor();
 });
 document.getElementById("btn-level-back")?.addEventListener("click", () => {
   if (menuSubScreen === "levels") {

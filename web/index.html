@@ -132,12 +132,28 @@
         <div id="menu-panel-level-select" class="menu-panel menu-panel-level-select hidden">
           <h2 class="menu-level-select-title">Choose track</h2>
           <div class="level-select-layout">
-            <div
-              id="level-select-list"
-              class="level-select-list"
-              role="listbox"
-              aria-label="Tracks"
-            ></div>
+            <div class="level-select-left">
+              <div class="level-select-toolbar">
+                <button type="button" class="menu-btn menu-btn-primary" id="btn-level-create-track">
+                  Create track
+                </button>
+                <button type="button" class="menu-btn" id="btn-level-import">Import…</button>
+                <input
+                  id="track-import-file"
+                  type="file"
+                  accept=".json,application/json"
+                  class="track-import-file-input"
+                  aria-label="Import track JSON"
+                  tabindex="-1"
+                />
+              </div>
+              <div
+                id="level-select-list"
+                class="level-select-list"
+                role="listbox"
+                aria-label="Tracks"
+              ></div>
+            </div>
             <div class="level-select-preview panel">
               <canvas
                 id="level-preview-canvas"
@@ -149,6 +165,16 @@
                 <div id="level-preview-name" class="level-preview-name">—</div>
                 <p id="level-preview-tag" class="level-preview-tag"></p>
               </div>
+              <div
+                id="level-select-custom-actions"
+                class="level-select-custom-actions hidden"
+                aria-label="Custom track actions"
+              >
+                <button type="button" class="menu-btn" id="btn-level-edit-track">Edit</button>
+                <button type="button" class="menu-btn menu-btn-danger" id="btn-level-delete-track">
+                  Delete
+                </button>
+              </div>
               <div class="leaderboard-aside level-select-lb" aria-label="Top times this track">
                 <div class="leaderboard-heading">Top 10 · this track</div>
                 <ol id="leaderboard-list-level-select" class="leaderboard-list"></ol>
@@ -159,6 +185,58 @@
                   Start race
                 </button>
               </div>
+            </div>
+          </div>
+        </div>
+        <div id="menu-panel-track-editor" class="menu-panel menu-panel-track-editor hidden">
+          <h2 class="track-editor-heading">Track editor</h2>
+          <p class="track-editor-lede">
+            Place corners or sketch a loop, then tune road width and smoothness. Export JSON to share
+            — friends use Import on the track list.
+          </p>
+          <div class="track-editor-shell">
+            <div class="track-editor-controls-top">
+              <div class="track-editor-mode-row">
+                <span class="track-editor-label">Draw</span>
+                <button type="button" class="menu-btn menu-btn-primary" id="track-editor-mode-points">
+                  Points
+                </button>
+                <button type="button" class="menu-btn" id="track-editor-mode-draw">Sketch</button>
+                <button type="button" class="menu-btn" id="track-editor-undo">Undo</button>
+                <button type="button" class="menu-btn" id="track-editor-clear">Clear</button>
+                <button type="button" class="menu-btn" id="track-editor-fit">Fit view</button>
+              </div>
+              <p id="track-editor-hint" class="track-editor-hint" role="status"></p>
+            </div>
+            <div class="track-editor-canvas-wrap">
+              <canvas id="track-editor-canvas" width="1200" height="560" aria-label="Track drawing canvas"></canvas>
+            </div>
+            <div class="track-editor-fields">
+              <label class="track-editor-field">
+                <span class="track-editor-field-label">Name</span>
+                <input
+                  id="track-editor-name"
+                  type="text"
+                  class="track-editor-input"
+                  maxlength="80"
+                  autocomplete="off"
+                  spellcheck="false"
+                />
+              </label>
+              <label class="track-editor-field">
+                <span class="track-editor-field-label">Smoothing (subdiv)</span>
+                <input id="track-editor-subdiv" type="number" min="8" max="20" step="1" class="track-editor-input track-editor-input-num" />
+              </label>
+              <label class="track-editor-field">
+                <span class="track-editor-field-label">Road width</span>
+                <input id="track-editor-width" type="number" min="0.75" max="1.35" step="0.05" class="track-editor-input track-editor-input-num" />
+              </label>
+            </div>
+            <div class="track-editor-actions menu-actions-row">
+              <button type="button" class="menu-btn menu-btn-primary" id="track-editor-save">Save</button>
+              <button type="button" class="menu-btn menu-btn-primary" id="track-editor-save-race">Save &amp; race</button>
+              <button type="button" class="menu-btn" id="track-editor-export">Export JSON</button>
+              <button type="button" class="menu-btn" id="track-editor-close">Back</button>
             </div>
           </div>
         </div>
@@ -255,6 +333,7 @@
             <button type="button" class="menu-btn menu-btn-primary" id="btn-new-game">
               New game
             </button>
+            <button type="button" class="menu-btn" id="btn-title-track-editor">Design track</button>
             <button type="button" class="menu-btn" id="btn-title-instructions">
               Instructions
             </button>
