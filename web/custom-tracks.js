@@ -2,6 +2,8 @@
  * User-drawn tracks: local persistence and import/export for sharing.
  */
 
+import { FIXED_EDGE_SUBDIV } from "./track-geometry.js";
+
 export const CUSTOM_STORAGE_KEY = "aneRacingCustomTracks_v1";
 export const TRACK_FILE_MAGIC = "ane-racing-track";
 export const TRACK_FILE_VERSION = 1;
@@ -71,7 +73,7 @@ export function createCustomTrack(data) {
     uid,
     name: String(data.name || "Untitled track").slice(0, 80),
     control: data.control.map((p) => ({ x: p.x, y: p.y })),
-    subdiv: clamp(Math.round(data.subdiv ?? 16), 8, 20),
+    subdiv: FIXED_EDGE_SUBDIV,
     widthScale: clamp(Number(data.widthScale ?? 1), 0.75, 1.35),
     createdAt: existing?.createdAt || new Date().toISOString(),
   };
@@ -98,7 +100,7 @@ export function exportTrackJson(rec) {
     uid: rec.uid,
     name: rec.name,
     control: rec.control.map((p) => ({ x: p.x, y: p.y })),
-    subdiv: rec.subdiv ?? 16,
+    subdiv: FIXED_EDGE_SUBDIV,
     widthScale: rec.widthScale ?? 1,
     exportedAt: new Date().toISOString(),
   };
@@ -137,7 +139,7 @@ export function importTrackFromJson(jsonText) {
     uid: newUid(),
     name: String(o.name || "Imported track").slice(0, 80),
     control: pts,
-    subdiv: clamp(Math.round(o.subdiv ?? 16), 8, 20),
+    subdiv: FIXED_EDGE_SUBDIV,
     widthScale: clamp(Number(o.widthScale ?? 1), 0.75, 1.35),
     createdAt: new Date().toISOString(),
   };

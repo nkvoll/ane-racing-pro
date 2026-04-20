@@ -900,7 +900,8 @@ body {
 }
 
 .track-editor-min-points-notice.hidden {
-  display: none !important;
+  visibility: hidden;
+  /* keep layout height so the panel does not jump when 4 points are placed / sketch is drawn */
 }
 
 .track-editor-min-points-notice strong {

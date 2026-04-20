@@ -133,20 +133,6 @@
           <h2 class="menu-level-select-title">Choose track</h2>
           <div class="level-select-layout">
             <div class="level-select-left">
-              <div class="level-select-toolbar">
-                <button type="button" class="menu-btn menu-btn-primary" id="btn-level-create-track">
-                  Create track
-                </button>
-                <button type="button" class="menu-btn" id="btn-level-import">Import…</button>
-                <input
-                  id="track-import-file"
-                  type="file"
-                  accept=".json,application/json"
-                  class="track-import-file-input"
-                  aria-label="Import track JSON"
-                  tabindex="-1"
-                />
-              </div>
               <div
                 id="level-select-list"
                 class="level-select-list"
@@ -233,10 +219,6 @@
                   autocomplete="off"
                   spellcheck="false"
                 />
-              </label>
-              <label class="track-editor-field">
-                <span class="track-editor-field-label">Smoothing (subdiv)</span>
-                <input id="track-editor-subdiv" type="number" min="8" max="20" step="1" value="16" class="track-editor-input track-editor-input-num" />
               </label>
               <label class="track-editor-field">
                 <span class="track-editor-field-label">Road width</span>

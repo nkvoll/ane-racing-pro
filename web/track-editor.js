@@ -20,7 +20,7 @@ function perpDist(p, a, b) {
   return Math.abs((p.x - a.x) * nx + (p.y - a.y) * ny) / nl;
 }
 
-/** Minimum anchor spacing (world coords) — stops stacked points that kink the Catmull–Rom spline. */
+/** Minimum anchor spacing (world coords) — stops stacked points that kink sharp geometry. */
 const MIN_CTRL_SEGMENT = 70;
 /** Merge vertices closer than this on closed loops after simplify / close. */
 const MERGE_EDGE_MIN = 58;
@@ -114,8 +114,8 @@ function simplifyRDP(points, epsilon) {
  * @param {{
  *   canvas: HTMLCanvasElement,
  *   onClose: () => void,
- *   onSave: (p: { name: string, control: {x:number,y:number}[], subdiv: number, widthScale: number, uid?: string }) => void,
- *   initial?: { uid?: string, name?: string, control?: {x:number,y:number}[], subdiv?: number, widthScale?: number } | null,
+ *   onSave: (p: { name: string, control: {x:number,y:number}[], widthScale: number, uid?: string }) => void,
+ *   initial?: { uid?: string, name?: string, control?: {x:number,y:number}[], widthScale?: number } | null,
  * }} opts
  */
 export function initTrackEditor(opts) {
@@ -151,6 +151,8 @@ export function initTrackEditor(opts) {
     if (!minPointsNoticeEl) return;
     const needMore = points.length < 4;
     minPointsNoticeEl.classList.toggle("hidden", !needMore);
+    if (needMore) minPointsNoticeEl.removeAttribute("aria-hidden");
+    else minPointsNoticeEl.setAttribute("aria-hidden", "true");
   }
 
   function syncDeletePointButton() {
@@ -216,22 +218,17 @@ export function initTrackEditor(opts) {
   const nameInput = /** @type {HTMLInputElement} */ (
     document.getElementById("track-editor-name")
   );
-  const subdivInput = /** @type {HTMLInputElement} */ (
-    document.getElementById("track-editor-subdiv")
-  );
   const widthInput = /** @type {HTMLInputElement} */ (
     document.getElementById("track-editor-width")
   );
   const hintEl = document.getElementById("track-editor-hint");
 
   if (nameInput) nameInput.value = opts.initial?.name || "My track";
-  if (subdivInput) subdivInput.value = String(opts.initial?.subdiv ?? 16);
   if (widthInput) widthInput.value = String(opts.initial?.widthScale ?? 1);
 
   function onRoadParamInput() {
     scheduleDraw();
   }
-  subdivInput?.addEventListener("input", onRoadParamInput);
   widthInput?.addEventListener("input", onRoadParamInput);
 
   if (opts.initial?.control?.length) {
@@ -241,17 +238,15 @@ export function initTrackEditor(opts) {
 
   function getFormPayload() {
     const name = nameInput?.value?.trim() || "Untitled track";
-    const subdiv = clamp(parseInt(String(subdivInput?.value ?? "16"), 10) || 16, 8, 20);
     const widthScale = clamp(parseFloat(String(widthInput?.value ?? "1")) || 1, 0.75, 1.35);
-    return { name, subdiv, widthScale };
+    return { name, widthScale };
   }
 
   /** Same road mesh as in-game; `null` if loop not ready. */
   function computeEditorMesh() {
     if (!closed || points.length < 4) return null;
-    const { subdiv, widthScale } = getFormPayload();
+    const { widthScale } = getFormPayload();
     return buildTrackLayout(points, {
-      subdiv,
       trackWidth: TRACK_WIDTH * widthScale,
     });
   }
@@ -625,7 +620,9 @@ export function initTrackEditor(opts) {
           points = mergeCloseControlRing(simp, MERGE_EDGE_MIN);
           closed = true;
           fitView();
-          setHint("Sketch converted — drag anchors if the road still looks pinched");
+          setMode("points");
+          selectedIdx = -1;
+          setHint("Sketch converted — points mode — drag anchors to tweak corners");
         }
       } else if (strokeBuf.length >= 4) {
         let simp = simplifyRDP(strokeBuf, RDP_SKETCH_TIGHT);
@@ -636,6 +633,9 @@ export function initTrackEditor(opts) {
         closed = true;
         points = mergeCloseControlRing(simp, MERGE_EDGE_MIN);
         fitView();
+        setMode("points");
+        selectedIdx = -1;
+        setHint("Sketch converted — points mode — drag anchors to tweak corners");
       }
       strokeBuf = [];
       scheduleDraw();
@@ -710,10 +710,9 @@ export function initTrackEditor(opts) {
   );
 
   function getSnapshot() {
-    const { name, subdiv, widthScale } = getFormPayload();
+    const { name, widthScale } = getFormPayload();
     return {
       name,
-      subdiv,
       widthScale,
       uid: editUid,
       control: points.map((p) => ({ x: p.x, y: p.y })),
@@ -727,12 +726,11 @@ export function initTrackEditor(opts) {
       setHint("Close the loop with at least 4 control points before saving");
       return;
     }
-    const { name, subdiv, widthScale } = getFormPayload();
+    const { name, widthScale } = getFormPayload();
     const control = points.map((p) => ({ x: p.x, y: p.y }));
     opts.onSave({
       name,
       control,
-      subdiv,
       widthScale,
       uid: editUid,
     });
@@ -743,12 +741,11 @@ export function initTrackEditor(opts) {
       setHint("Need a closed loop with at least 4 control points");
       return;
     }
-    const { name, subdiv, widthScale } = getFormPayload();
+    const { name, widthScale } = getFormPayload();
     const rec = {
       uid: editUid || `custom_export_${Date.now()}`,
       name,
       control: points.map((p) => ({ x: p.x, y: p.y })),
-      subdiv,
       widthScale,
     };
     const safe = name.replace(/[^\w\-]+/g, "_").slice(0, 40) || "track";
@@ -836,8 +833,6 @@ export function initTrackEditor(opts) {
     closed = true;
     editUid = typeof rec.uid === "string" && rec.uid.startsWith("custom_") ? rec.uid : editUid;
     if (nameInput) nameInput.value = rec.name || "Imported track";
-    if (subdivInput)
-      subdivInput.value = String(clamp(parseInt(String(rec.subdiv ?? 16), 10) || 16, 8, 20));
     if (widthInput)
       widthInput.value = String(clamp(parseFloat(String(rec.widthScale ?? 1)) || 1, 0.75, 1.35));
     points = mergeCloseControlRing(points, MERGE_EDGE_MIN);
@@ -886,7 +881,6 @@ export function initTrackEditor(opts) {
     btnClose?.removeEventListener("click", onToolbarClose);
     btnImport?.removeEventListener("click", onEditorImportBrowse);
     fileImport?.removeEventListener("change", onEditorImportFileChange);
-    subdivInput?.removeEventListener("input", onRoadParamInput);
     widthInput?.removeEventListener("input", onRoadParamInput);
     canvas.removeEventListener("pointerdown", onDown);
     canvas.removeEventListener("dblclick", onDblClick);

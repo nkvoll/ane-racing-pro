@@ -1,6 +1,6 @@
 /**
- * Track centerline control points (closed Catmull–Rom loops) for Ane Racing PRO.
- * Each layout is a simple closed curve (no self-intersection) so track offsets stay valid.
+ * Track centerline control points (closed loops) for Ane Racing PRO.
+ * Layouts use dense samples so the piecewise-linear centerline still reads as smooth curves.
  */
 
 const TAU = Math.PI * 2;
@@ -92,7 +92,7 @@ function pentacrown() {
 
 /**
  * Rounded stadium: two long straights + 180° ends.
- * Concatenates segments without duplicate corner vertices — repeats broke the Catmull–Rom
+ * Concatenates segments without duplicate corner vertices — repeats broke the layout mesh
  * (self-crossing ribbons / “walls over the field”, especially bottom-right).
  */
 function stadiumControl() {
@@ -165,7 +165,7 @@ function tearDropLoop() {
 }
 
 /**
- * @typedef {{ uid: string, id: string, name: string, tagline: string, subdiv?: number, widthScale?: number, buildControl: () => {x:number,y:number}[] }} LevelDef
+ * @typedef {{ uid: string, id: string, name: string, tagline: string, widthScale?: number, buildControl: () => {x:number,y:number}[] }} LevelDef
  * Stable `uid` (UUID) is used for saves and caches — safe across reordering. `id` is a short slug for humans / migration.
  * @type {LevelDef[]}
  */
@@ -176,7 +176,6 @@ export const LEVELS = [
     name: "Neon Infinity",
     tagline: "Twin apexes · classic flowing ∞",
     buildControl: () => buildSmoothBowtieControl(48),
-    subdiv: 14,
   },
   {
     uid: "b2f8a4d3-2e5b-42c1-a8f9-1c2d3e4f5b01",
@@ -184,7 +183,6 @@ export const LEVELS = [
     name: "Azure Oval",
     tagline: "Wide-open sweepers · pace management",
     buildControl: () => ovalSpeedwayPoints(),
-    subdiv: 13,
   },
   {
     uid: "c9a1e6f4-8c2d-43e7-b0a4-9f8e7d6c5b02",
@@ -192,7 +190,6 @@ export const LEVELS = [
     name: "Titan Stadium",
     tagline: "Long straights · heavy braking into bends",
     buildControl: () => stadiumControl(),
-    subdiv: 12,
   },
   {
     uid: "d4b7c8e2-1f6a-44d3-c5b8-0a1b2c3d4e03",
@@ -200,7 +197,6 @@ export const LEVELS = [
     name: "Trident Circuit",
     tagline: "Three-lobe cadence · technical",
     buildControl: () => triLobe(),
-    subdiv: 13,
   },
   {
     uid: "e1c9d2a6-5e8f-45c4-d9a7-1b2c3d4e5f04",
@@ -208,7 +204,6 @@ export const LEVELS = [
     name: "Quattro Cross",
     tagline: "Four equal pulses · metronome laps",
     buildControl: () => quattroLobe(),
-    subdiv: 13,
   },
   {
     uid: "f6d3e7b1-9a4c-46f8-e0b9-2c3d4e5f6a05",
@@ -216,7 +211,6 @@ export const LEVELS = [
     name: "Quantum Peanut",
     tagline: "Vertical waist squeeze · momentum game",
     buildControl: () => peanutTall(),
-    subdiv: 14,
   },
   {
     uid: "0a8e4f2c-7b1d-47a9-f1c0-3d4e5f6a7b06",
@@ -224,7 +218,6 @@ export const LEVELS = [
     name: "Solaris GP",
     tagline: "Asymmetric · one long blast straight",
     buildControl: () => asymmetricGP(),
-    subdiv: 13,
   },
   {
     uid: "1b9f5a3d-8c2e-48b0-a2d1-4e5f6a7b8c07",
@@ -232,7 +225,6 @@ export const LEVELS = [
     name: "Pentagrid Ribbon",
     tagline: "Five micro-crests · busy steering",
     buildControl: () => pentacrown(),
-    subdiv: 14,
   },
   {
     uid: "2c0a6b4e-9d3f-49c1-b3e2-5f6a7b8c9d08",
@@ -240,7 +232,6 @@ export const LEVELS = [
     name: "Ember Squircle",
     tagline: "Soft corners · grippy rhythm",
     buildControl: () => squircleCircuit(),
-    subdiv: 12,
   },
   {
     uid: "3d1b7c5f-0e4a-40d2-c4f3-6a7b8c9d0e09",
@@ -248,7 +239,6 @@ export const LEVELS = [
     name: "Vortex Teardrop",
     tagline: "One tight nose · long power arc home",
     buildControl: () => tearDropLoop(),
-    subdiv: 14,
   },
 ];
 

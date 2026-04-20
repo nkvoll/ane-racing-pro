@@ -8,8 +8,6 @@ import {
   loadCustomTracks,
   createCustomTrack,
   deleteCustomTrack,
-  importTrackFromJson,
-  upsertCustomTrack,
 } from "./custom-tracks.js";
 import { initTrackEditor } from "./track-editor.js";
 import { buildTrackLayout, distPointSegment, TRACK_WIDTH } from "./track-geometry.js";
@@ -67,7 +65,7 @@ const CAR_R = 16;
 class Track {
   /**
    * @param {{x:number,y:number}[]} control closed control polygon
-   * @param {{ subdiv?: number, trackWidth?: number }} [opts]
+   * @param {{ trackWidth?: number }} [opts]
    */
   constructor(control, opts = {}) {
     const g = buildTrackLayout(control, opts);
@@ -107,7 +105,6 @@ function customRecordToLevelDef(rec) {
     id: "custom",
     name: rec.name,
     tagline: "Custom · drawn track",
-    subdiv: rec.subdiv ?? 14,
     widthScale: rec.widthScale ?? 1,
     buildControl() {
       return ctrl.map((p) => ({ x: p.x, y: p.y }));
@@ -158,7 +155,7 @@ function buildTrackForLevel(levelUid) {
   if (!trackCache.has(def.uid)) {
     trackCache.set(
       def.uid,
-      new Track(control, { subdiv: def.subdiv, trackWidth: tw })
+      new Track(control, { trackWidth: tw })
     );
   }
   return trackCache.get(def.uid);
@@ -1725,8 +1722,8 @@ function openTrackEditor(initial, opts = {}) {
     onClose: () => {
       closeTrackEditorFromBack();
     },
-    onSave: ({ name, control, subdiv, widthScale, uid }) => {
-      const outUid = createCustomTrack({ name, control, subdiv, widthScale, uid });
+    onSave: ({ name, control, widthScale, uid }) => {
+      const outUid = createCustomTrack({ name, control, widthScale, uid });
       finishTrackEditorSave(outUid);
     },
   });
@@ -1739,7 +1736,6 @@ function trySaveAndRaceFromEditor() {
   const uid = createCustomTrack({
     name: snap.name,
     control: snap.control,
-    subdiv: snap.subdiv,
     widthScale: snap.widthScale,
     uid: snap.uid,
   });
@@ -1748,15 +1744,6 @@ function trySaveAndRaceFromEditor() {
   trackEditorFromTitle = false;
   setActiveLevel(uid);
   startSequence();
-}
-
-function importTrackFromFileText(text) {
-  const rec = importTrackFromJson(text);
-  upsertCustomTrack(rec);
-  trackCache.delete(rec.uid);
-  populateLevelSelectList();
-  levelSelectUid = rec.uid;
-  syncLevelSelectUi();
 }
 
 function showLevelSelectMenu() {
@@ -2490,30 +2477,6 @@ document.getElementById("btn-new-game")?.addEventListener("click", () => {
 });
 document.getElementById("btn-title-track-editor")?.addEventListener("click", () => {
   if (state.mode === "title") openTrackEditor(null, { fromTitle: true });
-});
-document.getElementById("btn-level-create-track")?.addEventListener("click", () => {
-  if (menuSubScreen === "levels" && state.mode === "title") {
-    openTrackEditor(null, { fromTitle: false });
-  }
-});
-document.getElementById("btn-level-import")?.addEventListener("click", () => {
-  document.getElementById("track-import-file")?.click();
-});
-document.getElementById("track-import-file")?.addEventListener("change", (e) => {
-  const input = /** @type {HTMLInputElement} */ (e.target);
-  const f = input.files?.[0];
-  if (!f) return;
-  const reader = new FileReader();
-  reader.onload = () => {
-    try {
-      importTrackFromFileText(String(reader.result || ""));
-    } catch (err) {
-      const msg = err && typeof err === "object" && "message" in err ? err.message : String(err);
-      window.alert(msg);
-    }
-    input.value = "";
-  };
-  reader.readAsText(f);
 });
 document.getElementById("btn-level-edit-track")?.addEventListener("click", () => {
   if (menuSubScreen !== "levels") return;
