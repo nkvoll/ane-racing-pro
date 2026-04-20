@@ -48,14 +48,25 @@ Quick unpacked test (faster, no installer):
 npm run dist:dir
 ```
 
-Build the way you ship: run `npm run dist` **on the target OS** (or use CI). Cross-compiling Electron native modules from one OS to another is not the default workflow; use a matrix on GitHub Actions if you need all three platforms.
+For a **native** Mac build on Apple Silicon, run `npm run dist` on the Mac (default targets are in `package.json` → `build`).
 
+### Cross-build Windows x64 from macOS (Apple Silicon)
 
-Example cross-compiling for windows from mac:
+[electron-builder](https://www.electron.build/cli) can produce a **64-bit Windows** build from your Mac: it downloads the Windows Electron binary and assembles the installer/portable zip here—no Windows VM required for this project (there are no native npm addons in the shipped app).
 
 ```bash
-npm run dist -- --win
+npm run dist -- --win --x64
 ```
+
+Outputs land in **`dist/`** (per `build.win` in `package.json`: NSIS `.exe` installer + `.zip`). To only build the zip (faster, fewer host tools):
+
+```bash
+npm run dist -- --win zip --x64
+```
+
+If the **NSIS** step fails on macOS, see the [electron-builder Windows](https://www.electron.build/configuration/win) / host-OS notes (sometimes [Wine](https://www.electron.build/multi-platform-build#building-for-windows-on-linux) is needed on Linux; on Mac, try updating `electron-builder` or use CI). **Code signing** for Windows from a Mac is optional and uses a separate certificate flow from Apple code signing.
+
+For all three OS artifacts without a local cross-build, use the [GitHub Actions workflow](.github/workflows/electron-build.yml) matrix.
 
 ## Project layout
 
