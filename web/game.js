@@ -1433,8 +1433,9 @@ let trackEditorApi = null;
 let levelSelectUid = LEVELS[0].uid;
 
 const CHECKPOINT_RINGS_KEY = "aneRacingShowCheckpointRings";
+const FORCE_MOBILE_MODE_KEY = "aneRacingForceMobileMode";
 /** Persisted UI toggles; checkpoint lap logic is unchanged when rings are off. */
-const gameOptions = { showCheckpointRings: false };
+const gameOptions = { showCheckpointRings: false, forceMobileMode: false };
 function loadCheckpointRingsOption() {
   try {
     const v = localStorage.getItem(CHECKPOINT_RINGS_KEY);
@@ -1444,7 +1445,17 @@ function loadCheckpointRingsOption() {
     return false;
   }
 }
+function loadForceMobileModeOption() {
+  try {
+    const v = localStorage.getItem(FORCE_MOBILE_MODE_KEY);
+    if (v === "1" || v === "true") return true;
+    return false;
+  } catch (_) {
+    return false;
+  }
+}
 gameOptions.showCheckpointRings = loadCheckpointRingsOption();
+gameOptions.forceMobileMode = loadForceMobileModeOption();
 
 const overlay = document.getElementById("overlay");
 const overlayTitle = document.getElementById("overlay-title");
@@ -1492,6 +1503,8 @@ function applyGameMenuOverlay(el) {
   el.style.setProperty("height", "100vh", I);
   el.style.setProperty("max-width", "100vw", I);
   el.style.setProperty("max-height", "100vh", I);
+  el.style.setProperty("height", "100dvh", I);
+  el.style.setProperty("max-height", "100dvh", I);
   el.style.setProperty("margin", "0", I);
   el.style.setProperty("padding", "1rem", I);
   el.style.setProperty("box-sizing", "border-box", I);
@@ -1596,9 +1609,19 @@ function showInstructionsSubmenu() {
   updateGameMenuPanels();
 }
 
+function syncForceMobileClass() {
+  document.documentElement.classList.toggle(
+    "force-mobile-testing",
+    !!gameOptions.forceMobileMode
+  );
+}
+
 function syncOptionsUi() {
   const el = document.getElementById("opt-show-checkpoints");
   if (el) el.checked = gameOptions.showCheckpointRings;
+  const mob = document.getElementById("opt-force-mobile");
+  if (mob) mob.checked = gameOptions.forceMobileMode;
+  syncForceMobileClass();
 }
 
 function showOptionsSubmenu() {
@@ -1669,6 +1692,7 @@ function showTitleMenu() {
   updateGameMenuPanels();
   viewportEl?.classList.remove("race-paused");
   keys.up = keys.down = keys.left = keys.right = keys.handbrake = false;
+  resetAllTouchDrive();
   if (gameMenuOverlayEl) {
     applyGameMenuOverlay(gameMenuOverlayEl);
     syncPauseSliderElements();
@@ -1923,10 +1947,13 @@ function openRaceOrCountdownMenu() {
     state.menuContext = "race";
     state.paused = true;
     keys.up = keys.down = keys.left = keys.right = keys.handbrake = false;
+    resetAllTouchDrive();
   } else if (state.mode === "countdown") {
     clearPreRaceCountdown();
     countdownEl.classList.add("hidden");
     state.menuContext = "countdown";
+    keys.up = keys.down = keys.left = keys.right = keys.handbrake = false;
+    resetAllTouchDrive();
   } else {
     return;
   }
@@ -2090,12 +2117,16 @@ function updateHud() {
   ammoCannonEl.textContent = String(Math.floor(pl.ammoCannon));
   ammoMissileEl.textContent = String(pl.ammoMissile);
   ammoMineEl.textContent = String(pl.ammoMines);
+  syncTouchRaceHud();
 }
 
 const ACCEL = 520;
 const FRICTION = 0.978;
 const STEER = 2.85;
 const MAX_SPEED = 420;
+/** Joystick deflection is a world-space drive vector; gain maps angle error → ±1 steer input. */
+const JOY_STICK_DEAD = 0.14;
+const JOY_STICK_STEER_GAIN = 2.45;
 
 /** Point on the centerline ~`distAhead` forward from vertex index `fromIdx` (arc-length). */
 function getCenterPointAhead(fromIdx, distAhead) {
@@ -2226,10 +2257,24 @@ function updateCar(car, dt, input) {
 
   if (car.isPlayer) {
     let steer = 0;
-    if (input.left) steer -= 1;
-    if (input.right) steer += 1;
+    let thr = 0;
     const hb = input.handbrake;
-    const thr = (input.up ? 1 : 0) - (input.down ? 0.35 : 0);
+    /** Screen axes match world axes (camera is translated only). Stick = desired drive direction on the map. */
+    if (touchDrive.stickActive) {
+      const jx = touchDrive.jx;
+      const jy = touchDrive.jy;
+      const mag = Math.min(1, hypot(jx, jy));
+      const want = Math.atan2(jy, jx);
+      const diff = wrapAngle(want - car.angle);
+      steer = clamp(diff * JOY_STICK_STEER_GAIN, -1, 1);
+      let tcos = mag * Math.cos(diff);
+      if (tcos < 0) tcos *= 0.35;
+      thr = tcos;
+    } else {
+      if (input.left) steer -= 1;
+      if (input.right) steer += 1;
+      thr = (input.up ? 1 : 0) - (input.down ? 0.35 : 0);
+    }
     if (thr !== 0) {
       const ax = Math.cos(car.angle) * ACCEL * thr * boostMul;
       const ay = Math.sin(car.angle) * ACCEL * thr * boostMul;
@@ -2448,6 +2493,194 @@ function accumulateCheckpointsForCars(cars, cps) {
 }
 
 const keys = { up: false, down: false, left: false, right: false, handbrake: false };
+
+/**
+ * Virtual joystick: `jx,jy` = screen/world drive direction (-1…1); handbrake from its button.
+ * (Keyboard still uses discrete keys via `mergedKeys`.)
+ */
+const touchDrive = {
+  jx: 0,
+  jy: 0,
+  stickActive: false,
+  handbrake: false,
+};
+
+const mergedKeys = {
+  up: false,
+  down: false,
+  left: false,
+  right: false,
+  handbrake: false,
+};
+
+function refreshMergedKeys() {
+  mergedKeys.up = keys.up;
+  mergedKeys.down = keys.down;
+  mergedKeys.left = keys.left;
+  mergedKeys.right = keys.right;
+  mergedKeys.handbrake = keys.handbrake || touchDrive.handbrake;
+}
+
+const touchHudEl = document.getElementById("touch-hud");
+const touchJoystickBaseEl = document.getElementById("touch-joystick-base");
+const touchJoystickKnobEl = document.getElementById("touch-joystick-knob");
+const touchHudMenuEl = document.getElementById("touch-hud-menu");
+const touchHudHbEl = document.getElementById("touch-hud-handbrake");
+
+function prefersTouchRaceHud() {
+  if (gameOptions.forceMobileMode) return true;
+  try {
+    if (matchMedia("(pointer: coarse)").matches) return true;
+  } catch (_) {}
+  return (navigator.maxTouchPoints ?? 0) > 0;
+}
+
+function resetAllTouchDrive() {
+  touchDrive.jx = 0;
+  touchDrive.jy = 0;
+  touchDrive.stickActive = false;
+  touchDrive.handbrake = false;
+  joystickPointerId = null;
+  if (touchJoystickKnobEl) touchJoystickKnobEl.style.transform = "translate(0, 0)";
+}
+
+/**
+ * @returns {void}
+ */
+function syncTouchRaceHud() {
+  if (!touchHudEl) return;
+  const show =
+    prefersTouchRaceHud() &&
+    !state.menuOpen &&
+    (state.mode === "race" || state.mode === "countdown");
+  touchHudEl.classList.toggle("hidden", !show);
+  touchHudEl.setAttribute("aria-hidden", show ? "false" : "true");
+  touchHudEl.classList.toggle("touch-hud--countdown", state.mode === "countdown");
+}
+
+let joystickPointerId = /** @type {number | null} */ (null);
+
+function updateJoystickKnobFromEvent(/** @type {PointerEvent} */ ev) {
+  if (!touchJoystickBaseEl || !touchJoystickKnobEl) return;
+  const rect = touchJoystickBaseEl.getBoundingClientRect();
+  const cx = rect.left + rect.width * 0.5;
+  const cy = rect.top + rect.height * 0.5;
+  const dx = ev.clientX - cx;
+  const dy = ev.clientY - cy;
+  const maxD = Math.min(rect.width, rect.height) * 0.38;
+  let nx = dx;
+  let ny = dy;
+  const d = Math.hypot(dx, dy);
+  if (d > maxD && d > 1e-6) {
+    nx = (dx / d) * maxD;
+    ny = (dy / d) * maxD;
+  }
+  const hx = maxD > 1e-6 ? nx / maxD : 0;
+  const hy = maxD > 1e-6 ? ny / maxD : 0;
+  const m = Math.hypot(hx, hy);
+  if (m < JOY_STICK_DEAD) {
+    touchDrive.jx = 0;
+    touchDrive.jy = 0;
+    touchDrive.stickActive = false;
+  } else {
+    touchDrive.jx = hx;
+    touchDrive.jy = hy;
+    touchDrive.stickActive = true;
+  }
+  touchJoystickKnobEl.style.transform = `translate(${nx}px, ${ny}px)`;
+}
+
+function clearJoystickTouchAxes() {
+  touchDrive.jx = 0;
+  touchDrive.jy = 0;
+  touchDrive.stickActive = false;
+  if (touchJoystickKnobEl) touchJoystickKnobEl.style.transform = "translate(0, 0)";
+}
+
+if (touchJoystickBaseEl && touchJoystickKnobEl) {
+  const base = touchJoystickBaseEl;
+  const onJMove = (/** @type {PointerEvent} */ ev) => {
+    if (joystickPointerId === null || ev.pointerId !== joystickPointerId) return;
+    ev.preventDefault();
+    updateJoystickKnobFromEvent(ev);
+  };
+  const onJEnd = (/** @type {PointerEvent} */ ev) => {
+    if (joystickPointerId === null || ev.pointerId !== joystickPointerId) return;
+    ev.preventDefault();
+    try {
+      base.releasePointerCapture(ev.pointerId);
+    } catch (_) {}
+    joystickPointerId = null;
+    clearJoystickTouchAxes();
+  };
+  base.addEventListener(
+    "pointerdown",
+    (ev) => {
+      if (joystickPointerId !== null) return;
+      try {
+        audio.ensureAudio();
+      } catch (_) {}
+      ev.preventDefault();
+      joystickPointerId = ev.pointerId;
+      try {
+        base.setPointerCapture(ev.pointerId);
+      } catch (_) {}
+      updateJoystickKnobFromEvent(ev);
+    },
+    { passive: false }
+  );
+  base.addEventListener("pointermove", onJMove, { passive: false });
+  base.addEventListener("pointerup", onJEnd);
+  base.addEventListener("pointercancel", onJEnd);
+  base.addEventListener("lostpointercapture", onJEnd);
+}
+
+if (touchHudHbEl) {
+  const setHb = (v) => {
+    touchDrive.handbrake = v;
+  };
+  touchHudHbEl.addEventListener("pointerdown", (e) => {
+    e.preventDefault();
+    try {
+      audio.ensureAudio();
+    } catch (_) {}
+    setHb(true);
+  });
+  touchHudHbEl.addEventListener("pointerup", () => setHb(false));
+  touchHudHbEl.addEventListener("pointercancel", () => setHb(false));
+  touchHudHbEl.addEventListener("pointerleave", (e) => {
+    if (e.buttons === 0) setHb(false);
+  });
+}
+
+function bindTouchWeapon(id, /** @type {"cannon"|"missile"|"mine"} */ type) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.addEventListener("pointerdown", (e) => {
+    e.preventDefault();
+    try {
+      audio.ensureAudio();
+    } catch (_) {}
+    if (state.mode !== "race" || state.paused || player.wrecked) return;
+    trySpawnProjectile(player, type);
+  });
+}
+
+bindTouchWeapon("touch-weapon-cannon", "cannon");
+bindTouchWeapon("touch-weapon-missile", "missile");
+bindTouchWeapon("touch-weapon-mine", "mine");
+
+if (touchHudMenuEl) {
+  touchHudMenuEl.addEventListener("click", (e) => {
+    e.preventDefault();
+    try {
+      audio.ensureAudio();
+    } catch (_) {}
+    if (state.mode === "race" || state.mode === "countdown") {
+      openRaceOrCountdownMenu();
+    }
+  });
+}
 
 window.addEventListener("keydown", (e) => {
   try {
@@ -2796,6 +3029,15 @@ document.getElementById("opt-show-checkpoints")?.addEventListener("change", (e) 
   try {
     localStorage.setItem(CHECKPOINT_RINGS_KEY, on ? "1" : "0");
   } catch (_) {}
+});
+document.getElementById("opt-force-mobile")?.addEventListener("change", (e) => {
+  const on = /** @type {HTMLInputElement} */ (e.target).checked;
+  gameOptions.forceMobileMode = on;
+  try {
+    localStorage.setItem(FORCE_MOBILE_MODE_KEY, on ? "1" : "0");
+  } catch (_) {}
+  syncForceMobileClass();
+  syncTouchRaceHud();
 });
 document
   .getElementById("btn-options-fullscreen")
@@ -3246,6 +3488,7 @@ function roundRect(ctx, x, y, w, h, r) {
 function frame(now) {
   const dt = clamp((now - lastFrame) / 1000, 0, 0.05);
   lastFrame = now;
+  refreshMergedKeys();
 
   if (state.mode === "race" && !state.paused) {
     const nowSec = now / 1000;
@@ -3254,7 +3497,7 @@ function frame(now) {
       updateCarCombatTimers(car, dt);
     }
     for (const car of cars) {
-      updateCar(car, dt, keys);
+      updateCar(car, dt, mergedKeys);
     }
     resolveCarCar();
     updateProjectiles(dt);
@@ -3298,7 +3541,7 @@ function frame(now) {
     updateHud();
   } else {
     for (const car of cars) {
-      updateCar(car, dt, keys);
+      updateCar(car, dt, mergedKeys);
     }
     updateParticles(dt);
     updateHud();

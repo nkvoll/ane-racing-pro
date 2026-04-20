@@ -366,10 +366,13 @@ export function initTrackEditor(opts) {
 
   function worldFromEvent(ev) {
     const r = canvas.getBoundingClientRect();
-    const sx = ((ev.clientX - r.left) * canvas.width) / r.width;
-    const sy = ((ev.clientY - r.top) * canvas.height) / r.height;
-    const wx = (sx - canvas.width / 2) / view.scale + view.cx;
-    const wy = (sy - canvas.height / 2) / view.scale + view.cy;
+    /** CSS/layout size — must match `draw()` (`translate(w/2,h/2)`), not `canvas.width` (backing store × DPR). */
+    const w = canvas.clientWidth;
+    const h = canvas.clientHeight;
+    const sx = ((ev.clientX - r.left) * w) / r.width;
+    const sy = ((ev.clientY - r.top) * h) / r.height;
+    const wx = (sx - w / 2) / view.scale + view.cx;
+    const wy = (sy - h / 2) / view.scale + view.cy;
     return { x: wx, y: wy };
   }
 

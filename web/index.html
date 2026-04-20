@@ -2,7 +2,10 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, viewport-fit=cover"
+    />
     <title>Ane Racing PRO</title>
     <link rel="stylesheet" href="styles.css" />
   </head>
@@ -104,6 +107,53 @@
         </div>
       </div>
       <div id="countdown" class="countdown hidden"></div>
+      <!-- Coarse-pointer touch race controls (see game.js) -->
+      <div id="touch-hud" class="touch-hud hidden" aria-hidden="true">
+        <button type="button" id="touch-hud-menu" class="touch-hud-menu" title="Menu">
+          Menu
+        </button>
+        <div class="touch-hud-weapons" aria-hidden="true">
+          <button
+            type="button"
+            id="touch-weapon-cannon"
+            class="touch-weapon touch-weapon--cannon"
+            aria-label="Plasma cannon"
+          >
+            ●
+          </button>
+          <button
+            type="button"
+            id="touch-weapon-missile"
+            class="touch-weapon touch-weapon--missile"
+            aria-label="Missile"
+          >
+            ▲
+          </button>
+          <button
+            type="button"
+            id="touch-weapon-mine"
+            class="touch-weapon touch-weapon--mine"
+            aria-label="Mine"
+          >
+            ◆
+          </button>
+        </div>
+        <div class="touch-hud-steer">
+          <button
+            type="button"
+            id="touch-hud-handbrake"
+            class="touch-hud-handbrake"
+            title="Handbrake"
+          >
+            HB
+          </button>
+          <div class="touch-joystick" aria-hidden="true">
+            <div class="touch-joystick-base" id="touch-joystick-base">
+              <div class="touch-joystick-knob" id="touch-joystick-knob"></div>
+            </div>
+          </div>
+        </div>
+      </div>
       </div>
     </div>
     <!-- Full-screen menu (title + pause); above #viewport / canvas -->
@@ -119,6 +169,10 @@
             <label class="menu-options-row">
               <input type="checkbox" id="opt-show-checkpoints" />
               <span>Show checkpoint rings</span>
+            </label>
+            <label class="menu-options-row">
+              <input type="checkbox" id="opt-force-mobile" />
+              <span>Force mobile mode (testing)</span>
             </label>
             <p class="menu-options-hint">When off, drivethrough checkpoints are hidden; laps still use checkpoints.</p>
           </div>
@@ -172,6 +226,12 @@
               ></div>
             </div>
             <div class="level-select-preview panel">
+              <div class="menu-actions menu-actions-row level-select-preview-actions">
+                <button type="button" class="menu-btn" id="btn-level-back">Back</button>
+                <button type="button" class="menu-btn menu-btn-primary" id="btn-level-start">
+                  Start race
+                </button>
+              </div>
               <canvas
                 id="level-preview-canvas"
                 width="360"
@@ -195,12 +255,6 @@
               <div class="leaderboard-aside level-select-lb" aria-label="Top times this track">
                 <div class="leaderboard-heading">Top 10 · this track</div>
                 <ol id="leaderboard-list-level-select" class="leaderboard-list"></ol>
-              </div>
-              <div class="menu-actions menu-actions-row">
-                <button type="button" class="menu-btn" id="btn-level-back">Back</button>
-                <button type="button" class="menu-btn menu-btn-primary" id="btn-level-start">
-                  Start race
-                </button>
               </div>
             </div>
           </div>
