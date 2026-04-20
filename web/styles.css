@@ -765,6 +765,18 @@ body {
   }
 }
 
+/* Phone portrait: left column = thumbnails only; title/tag/leaderboard stay in the preview pane. */
+@media (orientation: portrait) and (max-width: 900px) {
+  .pause-card:has(#menu-panel-level-select:not(.hidden)) .level-select-row-text {
+    display: none !important;
+  }
+
+  .pause-card:has(#menu-panel-level-select:not(.hidden)) .level-select-row {
+    justify-content: center;
+    padding: 0.35rem 0.45rem;
+  }
+}
+
 .pause-card:has(#menu-panel-track-editor:not(.hidden)) {
   max-width: min(1100px, 99vw);
   width: 100%;

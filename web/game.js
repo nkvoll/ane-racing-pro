@@ -1787,6 +1787,7 @@ function populateLevelSelectList() {
     row.type = "button";
     row.className = "level-select-row" + (extraClass ? ` ${extraClass}` : "");
     row.setAttribute("data-level-uid", Lv.uid);
+    row.setAttribute("aria-label", `${Lv.name}. ${Lv.tagline}`);
     row.innerHTML =
       '<canvas class="level-thumb-canvas" width="112" height="72" aria-hidden="true"></canvas>' +
       '<span class="level-select-row-text">' +
@@ -1815,6 +1816,7 @@ function populateLevelSelectList() {
     row.type = "button";
     row.className = "level-select-row level-select-row--custom";
     row.setAttribute("data-level-uid", def.uid);
+    row.setAttribute("aria-label", `${def.name}. ${def.tagline}`);
     row.innerHTML =
       '<canvas class="level-thumb-canvas" width="112" height="72" aria-hidden="true"></canvas>' +
       '<span class="level-select-row-text">' +
