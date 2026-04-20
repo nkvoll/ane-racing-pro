@@ -694,6 +694,7 @@ function rollPickupKind() {
 
 const chatLines = [];
 const CHAT_MAX_LINES = 48;
+const CHAT_VISIBLE_LINES = 3;
 let pickupToastTimer = 0;
 let chatTauntAcc = 0;
 let chatTauntNext = 4;
@@ -707,7 +708,7 @@ function addChatLine(name, color, text) {
 function renderChatLog() {
   if (!chatLogEl) return;
   chatLogEl.innerHTML = "";
-  for (const line of chatLines) {
+  for (const line of chatLines.slice(-CHAT_VISIBLE_LINES)) {
     const row = document.createElement("div");
     row.className = "chat-line";
     const who = document.createElement("span");
@@ -718,7 +719,6 @@ function renderChatLog() {
     row.appendChild(document.createTextNode(": " + line.text));
     chatLogEl.appendChild(row);
   }
-  chatLogEl.scrollTop = chatLogEl.scrollHeight;
 }
 
 function notifyPickupCollected(car, kind) {
