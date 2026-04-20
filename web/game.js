@@ -1250,7 +1250,7 @@ let preRaceCountdownIntervalId = null;
 let preRaceCountdownTimeoutId = null;
 let resumeCountdownIntervalId = null;
 let resumeCountdownTimeoutId = null;
-/** "main" | "audio" — nested Audio screen in game menu */
+/** "main" | "audio" | "controls" — nested menu screens */
 let menuSubScreen = "main";
 
 const overlay = document.getElementById("overlay");
@@ -1262,13 +1262,7 @@ const overlayLeaderboardEl = document.getElementById("overlay-leaderboard");
 const countdownEl = document.getElementById("countdown");
 const lapDisplay = document.getElementById("lap-display");
 const currentTimeEl = document.getElementById("current-time");
-const lastLapEl = document.getElementById("last-lap");
-const bestLapEl = document.getElementById("best-lap");
 const placeDisplayEl = document.getElementById("place-display");
-const hpBarEl = document.getElementById("hp-bar");
-const hpTextEl = document.getElementById("hp-text");
-const shieldTextEl = document.getElementById("shield-text");
-const boostTextEl = document.getElementById("boost-text");
 const ammoCannonEl = document.getElementById("ammo-cannon");
 const ammoMissileEl = document.getElementById("ammo-missile");
 const ammoMineEl = document.getElementById("ammo-mine");
@@ -1348,23 +1342,34 @@ function updateGameMenuPanels() {
   const titlePanel = document.getElementById("menu-panel-title");
   const pausePanel = document.getElementById("menu-panel-pause");
   const audioPanel = document.getElementById("menu-panel-audio");
-  if (!titlePanel || !pausePanel || !audioPanel) return;
+  const controlsPanel = document.getElementById("menu-panel-controls");
+  if (!titlePanel || !pausePanel || !audioPanel || !controlsPanel) return;
   const showTitle =
     state.mode === "title" && state.menuContext === "title" && state.menuOpen;
 
   if (menuSubScreen === "audio") {
     audioPanel.classList.remove("hidden");
+    controlsPanel.classList.add("hidden");
+    titlePanel.classList.add("hidden");
+    pausePanel.classList.add("hidden");
+    return;
+  }
+
+  if (menuSubScreen === "controls") {
+    controlsPanel.classList.remove("hidden");
+    audioPanel.classList.add("hidden");
     titlePanel.classList.add("hidden");
     pausePanel.classList.add("hidden");
     return;
   }
 
   audioPanel.classList.add("hidden");
+  controlsPanel.classList.add("hidden");
   titlePanel.classList.toggle("hidden", !showTitle);
   pausePanel.classList.toggle("hidden", showTitle);
 }
 
-function hideAudioSubmenu() {
+function exitMenuSubscreen() {
   menuSubScreen = "main";
   updateGameMenuPanels();
 }
@@ -1372,6 +1377,11 @@ function hideAudioSubmenu() {
 function showAudioSubmenu() {
   menuSubScreen = "audio";
   syncPauseSliderElements();
+  updateGameMenuPanels();
+}
+
+function showControlsSubmenu() {
+  menuSubScreen = "controls";
   updateGameMenuPanels();
 }
 
@@ -1581,19 +1591,8 @@ function updateHud() {
     }
   }
   currentTimeEl.textContent = formatTime(state.currentLapTime);
-  lastLapEl.textContent =
-    state.lastLapTime != null ? formatTime(state.lastLapTime) : "--:--.--";
-  bestLapEl.textContent =
-    state.bestLap != null ? formatTime(state.bestLap) : "--:--.--";
 
   const pl = player;
-  const h = pl.maxHp > 0 ? pl.hp / pl.maxHp : 0;
-  hpBarEl.style.transform = `scaleX(${clamp(h, 0, 1)})`;
-  hpTextEl.textContent = pl.wrecked ? "WRECK" : `${Math.round(pl.hp)}`;
-  shieldTextEl.textContent =
-    pl.shieldT > 0 ? `${pl.shieldT.toFixed(1)}s` : "—";
-  boostTextEl.textContent =
-    pl.boostT > 0 ? `${pl.boostT.toFixed(1)}s` : "—";
   ammoCannonEl.textContent = String(Math.floor(pl.ammoCannon));
   ammoMissileEl.textContent = String(pl.ammoMissile);
   ammoMineEl.textContent = String(pl.ammoMines);
@@ -1801,9 +1800,9 @@ window.addEventListener("keydown", (e) => {
   if (e.code === "ShiftLeft" || e.code === "ShiftRight") keys.handbrake = true;
 
   if (e.code === "Escape") {
-    if (state.menuOpen && menuSubScreen === "audio") {
+    if (state.menuOpen && (menuSubScreen === "audio" || menuSubScreen === "controls")) {
       e.preventDefault();
-      hideAudioSubmenu();
+      exitMenuSubscreen();
       return;
     }
     if (state.menuOpen) {
@@ -1823,9 +1822,9 @@ window.addEventListener("keydown", (e) => {
   }
 
   if (e.code === "KeyP" && !e.repeat) {
-    if (state.menuOpen && menuSubScreen === "audio") {
+    if (state.menuOpen && (menuSubScreen === "audio" || menuSubScreen === "controls")) {
       e.preventDefault();
-      hideAudioSubmenu();
+      exitMenuSubscreen();
       return;
     }
     if (state.mode === "race" || state.mode === "countdown") {
@@ -1839,8 +1838,8 @@ window.addEventListener("keydown", (e) => {
   if (e.code === "Space") {
     e.preventDefault();
     if (state.menuOpen) {
-      if (menuSubScreen === "audio") {
-        hideAudioSubmenu();
+      if (menuSubScreen === "audio" || menuSubScreen === "controls") {
+        exitMenuSubscreen();
         return;
       }
       if (state.menuContext === "title") {
@@ -1988,8 +1987,8 @@ if (musicVolumeEl) {
 if (gameMenuOverlayEl) {
   gameMenuOverlayEl.addEventListener("click", (e) => {
     if (e.target !== gameMenuOverlayEl) return;
-    if (menuSubScreen === "audio") {
-      hideAudioSubmenu();
+    if (menuSubScreen === "audio" || menuSubScreen === "controls") {
+      exitMenuSubscreen();
       return;
     }
     if (state.menuContext === "title") return;
@@ -2000,9 +1999,12 @@ if (gameMenuOverlayEl) {
 document.getElementById("btn-new-game")?.addEventListener("click", () => {
   if (state.mode === "title") startSequence();
 });
+document.getElementById("btn-title-controls")?.addEventListener("click", () => showControlsSubmenu());
+document.getElementById("btn-pause-controls")?.addEventListener("click", () => showControlsSubmenu());
 document.getElementById("btn-title-audio")?.addEventListener("click", () => showAudioSubmenu());
 document.getElementById("btn-pause-audio")?.addEventListener("click", () => showAudioSubmenu());
-document.getElementById("btn-audio-back")?.addEventListener("click", () => hideAudioSubmenu());
+document.getElementById("btn-audio-back")?.addEventListener("click", () => exitMenuSubscreen());
+document.getElementById("btn-controls-back")?.addEventListener("click", () => exitMenuSubscreen());
 document
   .getElementById("btn-title-fullscreen")
   ?.addEventListener("click", () => toggleFullscreenGame());
@@ -2037,6 +2039,21 @@ initPickups();
 showTitleMenu();
 
 let lastFrame = performance.now();
+
+/** Rounded car silhouette (local space); does not fill. */
+function carBodyPath(ctx, rx, ry, rw, rh, rr) {
+  ctx.beginPath();
+  ctx.moveTo(rx + rr, ry);
+  ctx.lineTo(rx + rw - rr, ry);
+  ctx.quadraticCurveTo(rx + rw, ry, rx + rw, ry + rr);
+  ctx.lineTo(rx + rw, ry + rh - rr);
+  ctx.quadraticCurveTo(rx + rw, ry + rh, rx + rw - rr, ry + rh);
+  ctx.lineTo(rx + rr, ry + rh);
+  ctx.quadraticCurveTo(rx, ry + rh, rx, ry + rh - rr);
+  ctx.lineTo(rx, ry + rr);
+  ctx.quadraticCurveTo(rx, ry, rx + rr, ry);
+  ctx.closePath();
+}
 
 function drawWorld() {
   const cx = state.camera.x;
@@ -2286,29 +2303,35 @@ function drawWorld() {
     ctx.shadowColor = car.color;
     ctx.shadowBlur = 12 / z;
 
-    ctx.fillStyle = "#111";
-    ctx.fillRect(-18, -10, 36, 20);
-
-    const hull = car.hp / car.maxHp;
-    ctx.globalAlpha = hull < 0.35 ? 0.72 : 1;
-    ctx.fillStyle = car.color;
-    ctx.beginPath();
     const rx = -16;
     const ry = -8;
     const rw = 32;
     const rh = 16;
     const rr = 3;
-    ctx.moveTo(rx + rr, ry);
-    ctx.lineTo(rx + rw - rr, ry);
-    ctx.quadraticCurveTo(rx + rw, ry, rx + rw, ry + rr);
-    ctx.lineTo(rx + rw, ry + rh - rr);
-    ctx.quadraticCurveTo(rx + rw, ry + rh, rx + rw - rr, ry + rh);
-    ctx.lineTo(rx + rr, ry + rh);
-    ctx.quadraticCurveTo(rx, ry + rh, rx, ry + rh - rr);
-    ctx.lineTo(rx, ry + rr);
-    ctx.quadraticCurveTo(rx, ry, rx + rr, ry);
-    ctx.fill();
-    ctx.globalAlpha = 1;
+    const hullFrac = car.wrecked ? 0 : car.hp / car.maxHp;
+
+    ctx.fillStyle = car.isPlayer ? "#000000" : "#111111";
+    ctx.fillRect(-18, -10, 36, 20);
+
+    if (car.isPlayer) {
+      const h = clamp(hullFrac, 0, 1);
+      if (h > 0.003) {
+        ctx.save();
+        ctx.beginPath();
+        ctx.rect(rx - 0.5, ry + rh * (1 - h), rw + 1, rh * h + 0.5);
+        ctx.clip();
+        carBodyPath(ctx, rx, ry, rw, rh, rr);
+        ctx.fillStyle = car.color;
+        ctx.fill();
+        ctx.restore();
+      }
+    } else {
+      ctx.globalAlpha = hullFrac < 0.35 ? 0.72 : 1;
+      carBodyPath(ctx, rx, ry, rw, rh, rr);
+      ctx.fillStyle = car.color;
+      ctx.fill();
+      ctx.globalAlpha = 1;
+    }
 
     ctx.fillStyle = "rgba(0,0,0,0.35)";
     ctx.fillRect(6, -6, 8, 12);
@@ -2365,8 +2388,57 @@ function drawWorld() {
     ctx.shadowBlur = 0;
   }
   ctx.globalAlpha = 1;
+  ctx.shadowBlur = 0;
+
+  // Player: compact shield / boost timers under car (world space)
+  if (state.mode === "race" || state.mode === "finished") {
+    const pl = player;
+    if (!pl.wrecked && (pl.shieldT > 0 || pl.boostT > 0)) {
+      const fs = Math.max(8 / z, 7);
+      const lineGap = (fs + 3) / z;
+      ctx.textAlign = "center";
+      ctx.textBaseline = "top";
+      let y = pl.y + CAR_R + 5 / z;
+      ctx.font = `700 ${fs}px Orbitron,sans-serif`;
+      if (pl.shieldT > 0) {
+        const label = `S ${pl.shieldT.toFixed(1)}s`;
+        ctx.fillStyle = "rgba(8,10,18,0.82)";
+        const w = Math.max(ctx.measureText(label).width + 8 / z, 52 / z);
+        roundRect(ctx, pl.x - w / 2, y - 1 / z, w, fs + 5 / z, 4 / z);
+        ctx.fill();
+        ctx.fillStyle = "#c5ceff";
+        ctx.fillText(label, pl.x, y);
+        y += lineGap;
+      }
+      if (pl.boostT > 0) {
+        const label = `B ${pl.boostT.toFixed(1)}s`;
+        ctx.fillStyle = "rgba(8,10,18,0.82)";
+        const w = Math.max(ctx.measureText(label).width + 8 / z, 52 / z);
+        roundRect(ctx, pl.x - w / 2, y - 1 / z, w, fs + 5 / z, 4 / z);
+        ctx.fill();
+        ctx.fillStyle = "#ffd699";
+        ctx.fillText(label, pl.x, y);
+      }
+    }
+  }
 
   ctx.restore();
+}
+
+/** Rounded rect fill (current fillStyle). */
+function roundRect(ctx, x, y, w, h, r) {
+  const rr = Math.min(r, w * 0.5, h * 0.5);
+  ctx.beginPath();
+  ctx.moveTo(x + rr, y);
+  ctx.lineTo(x + w - rr, y);
+  ctx.quadraticCurveTo(x + w, y, x + w, y + rr);
+  ctx.lineTo(x + w, y + h - rr);
+  ctx.quadraticCurveTo(x + w, y + h, x + w - rr, y + h);
+  ctx.lineTo(x + rr, y + h);
+  ctx.quadraticCurveTo(x, y + h, x, y + h - rr);
+  ctx.lineTo(x, y + rr);
+  ctx.quadraticCurveTo(x, y, x + rr, y);
+  ctx.closePath();
 }
 
 function frame(now) {

@@ -13,17 +13,38 @@
         <canvas id="game" width="1280" height="720"></canvas>
       </div>
       <div id="ui" class="ui-overlay">
+      <div class="ui-top-stack">
       <header class="ui-header">
         <h1 class="brand-title">
           <span class="brand-shimmer">Ane Racing</span>
           <span class="brand-pro">PRO</span>
         </h1>
-        <p class="tagline">
-          WASD · <strong>Shift</strong> handbrake · <strong>F</strong> / <strong>E</strong> /
-          <strong>C</strong> weapons · <strong>Esc</strong> / <strong>P</strong> menu ·
-          <strong>Space</strong> new game / resume
-        </p>
       </header>
+      <div class="hud">
+        <div class="panel highlight">
+          <div class="label">Place</div>
+          <div id="place-display" class="value">—</div>
+        </div>
+        <div class="panel">
+          <div class="label">Lap</div>
+          <div id="lap-display" class="value">1 / 3</div>
+        </div>
+        <div class="panel wide">
+          <div class="label">Current</div>
+          <div id="current-time" class="value mono">--:--.--</div>
+        </div>
+      </div>
+      <div class="hud hud-combat hud-arsenal-only">
+        <div class="panel arsenal-panel">
+          <div class="label arsenal-label">Arsenal</div>
+          <div id="ammo-text" class="ammo-compact">
+            <span class="ammo cannon">●</span><span id="ammo-cannon">0</span>
+            <span class="ammo missile">▲</span><span id="ammo-missile">0</span>
+            <span class="ammo mine">◆</span><span id="ammo-mine">0</span>
+          </div>
+        </div>
+      </div>
+      </div>
       <aside class="pickup-legend panel" aria-label="Pickup guide">
         <div class="label">Track pickups</div>
         <ul class="pickup-legend-list">
@@ -77,53 +98,6 @@
           </li>
         </ul>
       </aside>
-      <div class="hud">
-        <div class="panel highlight">
-          <div class="label">Place</div>
-          <div id="place-display" class="value">—</div>
-        </div>
-        <div class="panel">
-          <div class="label">Lap</div>
-          <div id="lap-display" class="value">1 / 3</div>
-        </div>
-        <div class="panel wide">
-          <div class="label">Current</div>
-          <div id="current-time" class="value mono">--:--.--</div>
-        </div>
-        <div class="panel wide">
-          <div class="label">Last lap</div>
-          <div id="last-lap" class="value mono">--:--.--</div>
-        </div>
-        <div class="panel wide highlight">
-          <div class="label">Best lap</div>
-          <div id="best-lap" class="value mono">--:--.--</div>
-        </div>
-      </div>
-      <div class="hud hud-combat">
-        <div class="panel grow">
-          <div class="label">Health</div>
-          <div class="bar-wrap">
-            <div id="hp-bar" class="bar hp"></div>
-          </div>
-          <div id="hp-text" class="value small mono">100</div>
-        </div>
-        <div class="panel">
-          <div class="label">Shield</div>
-          <div id="shield-text" class="value mono">—</div>
-        </div>
-        <div class="panel">
-          <div class="label">Boost</div>
-          <div id="boost-text" class="value mono">—</div>
-        </div>
-        <div class="panel wide">
-          <div class="label">Arsenal</div>
-          <div id="ammo-text" class="value small">
-            <span class="ammo cannon">●</span> <span id="ammo-cannon">0</span>
-            <span class="ammo missile">▲</span> <span id="ammo-missile">0</span>
-            <span class="ammo mine">◆</span> <span id="ammo-mine">0</span>
-          </div>
-        </div>
-      </div>
       <div
         id="pickup-toast"
         class="pickup-toast hidden"
@@ -202,14 +176,48 @@
             </button>
           </div>
         </div>
+        <div id="menu-panel-controls" class="menu-panel menu-panel-controls hidden">
+          <h2 class="menu-controls-title">Controls</h2>
+          <div class="menu-controls-scroll" aria-label="Keyboard">
+            <section class="menu-controls-block">
+              <h3 class="menu-controls-heading">Drive</h3>
+              <ul class="menu-controls-list">
+                <li><kbd>W</kbd> <kbd>A</kbd> <kbd>S</kbd> <kbd>D</kbd> or arrow keys — steer &amp; throttle / reverse</li>
+                <li><kbd>Shift</kbd> — handbrake (tighter turns at speed)</li>
+              </ul>
+            </section>
+            <section class="menu-controls-block">
+              <h3 class="menu-controls-heading">Weapons</h3>
+              <ul class="menu-controls-list">
+                <li><kbd>F</kbd> — plasma cannon (forward)</li>
+                <li><kbd>E</kbd> — homing missile (aim cone)</li>
+                <li><kbd>C</kbd> — drop mine behind you</li>
+              </ul>
+            </section>
+            <section class="menu-controls-block">
+              <h3 class="menu-controls-heading">Menu &amp; pause</h3>
+              <ul class="menu-controls-list">
+                <li><kbd>Esc</kbd> / <kbd>P</kbd> — pause (+ resume from pause menu)</li>
+                <li><kbd>Space</kbd> — from title: start race; from pause: resume (after 3…2…1)</li>
+              </ul>
+            </section>
+          </div>
+          <div class="menu-actions">
+            <button type="button" class="menu-btn menu-btn-primary" id="btn-controls-back">
+              Back
+            </button>
+          </div>
+        </div>
         <div id="menu-panel-title" class="menu-panel">
           <div class="menu-title-columns">
             <div class="menu-title-primary">
           <h2 class="menu-main-title">Ane Racing PRO</h2>
-          <p class="menu-sub">Audio on first key · F / E / C weapons</p>
           <div class="menu-actions">
             <button type="button" class="menu-btn menu-btn-primary" id="btn-new-game">
               New game
+            </button>
+            <button type="button" class="menu-btn" id="btn-title-controls">
+              Controls
             </button>
             <button type="button" class="menu-btn" id="btn-title-audio">
               Audio
@@ -238,6 +246,9 @@
             <button type="button" class="menu-btn" id="btn-restart-race">
               Restart race
             </button>
+            <button type="button" class="menu-btn" id="btn-pause-controls">
+              Controls
+            </button>
             <button type="button" class="menu-btn" id="btn-pause-audio">
               Audio
             </button>
@@ -248,9 +259,6 @@
               Main menu
             </button>
           </div>
-          <p id="pause-hint" class="hint">
-            <kbd>Esc</kbd> / <kbd>P</kbd> / <kbd>Space</kbd> — resume (3…2…1… go!)
-          </p>
         </div>
       </div>
     </div>
