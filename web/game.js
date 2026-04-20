@@ -1622,51 +1622,59 @@ function syncForceMobileClass() {
  */
 function isLikelyIOSDevice() {
   try {
-    const uad = navigator.userAgentData;
-    if (uad && typeof uad.platform === "string" && uad.platform === "iOS") return true;
-  } catch (_) {}
-  const ua = navigator.userAgent || "";
-  if (/\b(iPhone|iPod)\b/i.test(ua)) return true;
-  if (/\biPad\b/i.test(ua)) return true;
+    try {
+      const uad = navigator.userAgentData;
+      if (uad && typeof uad.platform === "string" && uad.platform === "iOS") return true;
+    } catch (_) {}
+    const ua = navigator.userAgent || "";
+    if (/\b(iPhone|iPod)\b/i.test(ua)) return true;
+    if (/\biPad\b/i.test(ua)) return true;
 
-  if (/Chrome\//i.test(ua) && !/CriOS/i.test(ua)) return false;
-  if (/Edg\//i.test(ua) && !/EdgiOS/i.test(ua)) return false;
-  if (/Firefox\//i.test(ua) && !/FxiOS/i.test(ua)) return false;
+    if (/Chrome\//i.test(ua) && !/CriOS/i.test(ua)) return false;
+    if (/Edg\//i.test(ua) && !/EdgiOS/i.test(ua)) return false;
+    if (/Firefox\//i.test(ua) && !/FxiOS/i.test(ua)) return false;
 
-  const mtp = navigator.maxTouchPoints ?? 0;
-  if (
-    mtp > 1 &&
-    (navigator.platform === "MacIntel" || navigator.platform === "iPad") &&
-    /Safari\//i.test(ua) &&
-    !/Chrome\//i.test(ua)
-  ) {
-    return true;
+    const mtp = navigator.maxTouchPoints ?? 0;
+    if (
+      mtp > 1 &&
+      (navigator.platform === "MacIntel" || navigator.platform === "iPad") &&
+      /Safari\//i.test(ua) &&
+      !/Chrome\//i.test(ua)
+    ) {
+      return true;
+    }
+    return false;
+  } catch (_) {
+    return false;
   }
-  return false;
 }
 
 function syncOptionsEnableAudioButton() {
-  const wrap = document.getElementById("menu-options-enable-audio-wrap");
-  const btn = document.getElementById("btn-options-enable-audio");
-  if (!wrap || !btn) return;
-  if (!isLikelyIOSDevice()) {
-    wrap.classList.add("hidden");
-    wrap.hidden = true;
-    wrap.setAttribute("aria-hidden", "true");
-    return;
-  }
-  wrap.classList.remove("hidden");
-  wrap.hidden = false;
-  wrap.setAttribute("aria-hidden", "false");
-  const running = audio.isAudioContextRunning();
-  if (running) {
-    btn.textContent = "Sound enabled";
-    btn.disabled = true;
-    btn.classList.add("menu-btn--audio-enabled");
-  } else {
-    btn.textContent = "Enable sound";
-    btn.disabled = false;
-    btn.classList.remove("menu-btn--audio-enabled");
+  try {
+    const wrap = document.getElementById("menu-options-enable-audio-wrap");
+    const btn = document.getElementById("btn-options-enable-audio");
+    if (!wrap || !btn) return;
+    if (!isLikelyIOSDevice()) {
+      wrap.classList.add("hidden");
+      wrap.hidden = true;
+      wrap.setAttribute("aria-hidden", "true");
+      return;
+    }
+    wrap.classList.remove("hidden");
+    wrap.hidden = false;
+    wrap.setAttribute("aria-hidden", "false");
+    const running = audio.isAudioContextRunning();
+    if (running) {
+      btn.textContent = "Sound enabled";
+      btn.disabled = true;
+      btn.classList.add("menu-btn--audio-enabled");
+    } else {
+      btn.textContent = "Enable sound";
+      btn.disabled = false;
+      btn.classList.remove("menu-btn--audio-enabled");
+    }
+  } catch (_) {
+    /* Never block menu init / rAF — see startup order at bottom of file. */
   }
 }
 
@@ -1681,7 +1689,9 @@ function syncOptionsUi() {
 
 function showOptionsSubmenu() {
   menuSubScreen = "options";
-  syncOptionsUi();
+  try {
+    syncOptionsUi();
+  } catch (_) {}
   syncPauseSliderElements();
   void syncFullscreenButtonLabels();
   updateGameMenuPanels();
@@ -3760,6 +3770,9 @@ function frame(now) {
   requestAnimationFrame(frame);
 }
 
-syncOptionsUi();
+/* Start the loop first: syncOptionsUi can touch iOS-only DOM; if it throws, countdown/gameplay must still run. */
 updateHud();
 requestAnimationFrame(frame);
+try {
+  syncOptionsUi();
+} catch (_) {}
