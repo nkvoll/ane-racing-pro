@@ -1616,67 +1616,12 @@ function syncForceMobileClass() {
   );
 }
 
-/**
- * Options “Enable sound” — real iOS / iPadOS only.
- * Prefer `userAgentData.platform` when present (Chromium); fall back to UA tokens / iPad desktop Safari heuristic.
- */
-function isLikelyIOSDevice() {
-  try {
-    const uad = navigator.userAgentData;
-    if (uad && typeof uad.platform === "string" && uad.platform === "iOS") return true;
-  } catch (_) {}
-  const ua = navigator.userAgent || "";
-  if (/\b(iPhone|iPod)\b/i.test(ua)) return true;
-  if (/\biPad\b/i.test(ua)) return true;
-
-  if (/Chrome\//i.test(ua) && !/CriOS/i.test(ua)) return false;
-  if (/Edg\//i.test(ua) && !/EdgiOS/i.test(ua)) return false;
-  if (/Firefox\//i.test(ua) && !/FxiOS/i.test(ua)) return false;
-
-  const mtp = navigator.maxTouchPoints ?? 0;
-  if (
-    mtp > 1 &&
-    (navigator.platform === "MacIntel" || navigator.platform === "iPad") &&
-    /Safari\//i.test(ua) &&
-    !/Chrome\//i.test(ua)
-  ) {
-    return true;
-  }
-  return false;
-}
-
-function syncOptionsEnableAudioButton() {
-  const wrap = document.getElementById("menu-options-enable-audio-wrap");
-  const btn = document.getElementById("btn-options-enable-audio");
-  if (!wrap || !btn) return;
-  if (!isLikelyIOSDevice()) {
-    wrap.classList.add("hidden");
-    wrap.hidden = true;
-    wrap.setAttribute("aria-hidden", "true");
-    return;
-  }
-  wrap.classList.remove("hidden");
-  wrap.hidden = false;
-  wrap.setAttribute("aria-hidden", "false");
-  const running = audio.isAudioContextRunning();
-  if (running) {
-    btn.textContent = "Sound enabled";
-    btn.disabled = true;
-    btn.classList.add("menu-btn--audio-enabled");
-  } else {
-    btn.textContent = "Enable sound";
-    btn.disabled = false;
-    btn.classList.remove("menu-btn--audio-enabled");
-  }
-}
-
 function syncOptionsUi() {
   const el = document.getElementById("opt-show-checkpoints");
   if (el) el.checked = gameOptions.showCheckpointRings;
   const mob = document.getElementById("opt-force-mobile");
   if (mob) mob.checked = gameOptions.forceMobileMode;
   syncForceMobileClass();
-  syncOptionsEnableAudioButton();
 }
 
 function showOptionsSubmenu() {
@@ -3196,14 +3141,6 @@ document.getElementById("opt-force-mobile")?.addEventListener("change", (e) => {
 document
   .getElementById("btn-options-fullscreen")
   ?.addEventListener("click", () => toggleFullscreenGame());
-document.getElementById("btn-options-enable-audio")?.addEventListener("click", () => {
-  audio.tryResumeAudioFromGesture();
-  const tick = () => syncOptionsEnableAudioButton();
-  tick();
-  requestAnimationFrame(tick);
-  setTimeout(tick, 50);
-  setTimeout(tick, 200);
-});
 document.getElementById("btn-title-exit")?.addEventListener("click", () => exitGame());
 document.getElementById("btn-pause-main-menu")?.addEventListener("click", () => returnToMainMenuFromPause());
 document.getElementById("btn-resume")?.addEventListener("click", () => resumeFromGameMenu());
@@ -3725,12 +3662,13 @@ function frame(now) {
     updateHud();
   }
 
-  /* Keep BGM through pre-race countdown, pause / pause menu, and post-restart resume countdown (not only when menu is open). */
-  const musicOnTitleMenu =
-    state.menuOpen && state.menuContext === "title" && state.mode === "title";
-  const musicInRacingFlow =
-    state.mode === "countdown" || state.mode === "race" || state.mode === "finished";
-  if (musicOnTitleMenu || musicInRacingFlow) {
+  const musicInMenu =
+    state.menuOpen &&
+    (state.menuContext === "title" ||
+      state.menuContext === "race" ||
+      state.menuContext === "countdown");
+  const musicInRace = state.mode === "race" && !state.paused;
+  if (musicInMenu || musicInRace) {
     try {
       audio.updateMusic(dt);
     } catch (_) {}
