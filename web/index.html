@@ -123,6 +123,39 @@
             </button>
           </div>
         </div>
+        <div id="menu-panel-level-select" class="menu-panel menu-panel-level-select hidden">
+          <h2 class="menu-level-select-title">Choose track</h2>
+          <div class="level-select-layout">
+            <div
+              id="level-select-list"
+              class="level-select-list"
+              role="listbox"
+              aria-label="Tracks"
+            ></div>
+            <div class="level-select-preview panel">
+              <canvas
+                id="level-preview-canvas"
+                width="360"
+                height="240"
+                aria-hidden="true"
+              ></canvas>
+              <div class="level-preview-meta">
+                <div id="level-preview-name" class="level-preview-name">—</div>
+                <p id="level-preview-tag" class="level-preview-tag"></p>
+              </div>
+              <div class="leaderboard-aside level-select-lb" aria-label="Top times this track">
+                <div class="leaderboard-heading">Top 10 · this track</div>
+                <ol id="leaderboard-list-level-select" class="leaderboard-list"></ol>
+              </div>
+              <div class="menu-actions menu-actions-row">
+                <button type="button" class="menu-btn" id="btn-level-back">Back</button>
+                <button type="button" class="menu-btn menu-btn-primary" id="btn-level-start">
+                  Start race
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
         <div id="menu-panel-instructions" class="menu-panel menu-panel-instructions hidden">
           <h2 class="menu-instructions-title">Instructions</h2>
           <div class="menu-instructions-scroll" aria-label="Controls and pickups">
@@ -145,7 +178,7 @@
               <h3 class="menu-instructions-heading">Menu &amp; pause</h3>
               <ul class="menu-instructions-list">
                 <li><kbd>Esc</kbd> / <kbd>P</kbd> — pause (+ resume from pause menu)</li>
-                <li><kbd>Space</kbd> — from title: start race; from pause: resume (after 3…2…1)</li>
+                <li><kbd>Space</kbd> — from title: choose track; in track list: start race; from pause: resume (after 3…2…1)</li>
               </ul>
             </section>
             <section class="menu-instructions-block">
@@ -232,7 +265,10 @@
             </div>
             <aside class="leaderboard-aside panel" aria-label="Top saved races">
               <div class="leaderboard-heading">Top 10 races</div>
-              <p class="leaderboard-hint">3-lap totals · saved on this device</p>
+              <p class="leaderboard-hint">
+                <span id="leaderboard-track-label">—</span>
+                · 3-lap totals · saved on this device
+              </p>
               <ol id="leaderboard-list-title" class="leaderboard-list"></ol>
             </aside>
           </div>

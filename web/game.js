@@ -3,6 +3,7 @@
  */
 
 import * as audio from "./audio.js";
+import { LEVELS, getLevelByUid, getLevelBySlug } from "./tracks.js";
 
 const TAU = Math.PI * 2;
 
@@ -127,42 +128,22 @@ function circleHitsSegment(cx, cy, r, ax, ay, bx, by) {
   return distPointSegment(cx, cy, ax, ay, bx, by) < r;
 }
 
-/**
- * Smooth bowtie “∞” (two lobes + east/west waist). Scaled ~2× vs the original so a lap is ~2×
- * longer; gentler pinch + light 3rd-harmonic wobble add length without hairpins.
- * Closed simple curve — no self-intersection — so offset walls stay continuous.
- */
-function buildSmoothBowtieControl(numPoints) {
-  const pts = [];
-  const n = Math.max(28, numPoints | 0);
-  const a = 818;
-  const b = 702;
-  const pinch = 0.24;
-  const wobble = 0.038;
-  for (let k = 0; k < n; k++) {
-    const t = (k / n) * Math.PI * 2;
-    const rScale = 1 + pinch * Math.cos(2 * t);
-    let x = a * Math.sin(t) * rScale;
-    let y = b * Math.cos(t);
-    x *= 1 + wobble * Math.sin(3 * t);
-    y *= 1 + wobble * 0.55 * Math.cos(3 * t);
-    pts.push({ x, y });
-  }
-  return pts;
-}
-
-const CONTROL = buildSmoothBowtieControl(48);
-const SUBDIV = 14;
+const DEFAULT_SUBDIV = 14;
 const TRACK_WIDTH = 162;
 const CAR_R = 16;
 
 class Track {
-  constructor() {
-    const raw = buildClosedSpline(CONTROL, SUBDIV);
+  /**
+   * @param {{x:number,y:number}[]} control closed control polygon
+   * @param {{ subdiv?: number, trackWidth?: number }} [opts]
+   */
+  constructor(control, opts = {}) {
+    const subdiv = opts.subdiv != null ? opts.subdiv : DEFAULT_SUBDIV;
+    const raw = buildClosedSpline(control, subdiv);
     const rot = findLongestEdgeStartIndex(raw);
     this.center = rotateClosedPolyline(raw, rot);
     this.n = this.center.length;
-    this.width = TRACK_WIDTH;
+    this.width = opts.trackWidth != null ? opts.trackWidth : TRACK_WIDTH;
     this.inner = [];
     this.outer = [];
     this.wallSegments = [];
@@ -259,6 +240,44 @@ class Track {
   }
 }
 
+const trackCache = new Map();
+
+/** Resolve persisted menu selection: UUID, legacy slug `id`, or legacy numeric index. */
+function resolveStoredLevelUid(stored) {
+  if (stored == null || stored === "") return LEVELS[0].uid;
+  const s = String(stored).trim();
+  if (LEVELS.some((L) => L.uid === s)) return s;
+  const bySlug = getLevelBySlug(s);
+  if (bySlug) return bySlug.uid;
+  const n = parseInt(s, 10);
+  if (!Number.isNaN(n) && n >= 0 && n < LEVELS.length) return LEVELS[n].uid;
+  return LEVELS[0].uid;
+}
+
+function readInitialLevelUid() {
+  try {
+    return resolveStoredLevelUid(localStorage.getItem("aneRacingLastLevel"));
+  } catch (_) {
+    return LEVELS[0].uid;
+  }
+}
+
+function buildTrackForLevel(levelUid) {
+  const def = getLevelByUid(levelUid);
+  const control = def.buildControl();
+  const tw = TRACK_WIDTH * (def.widthScale ?? 1);
+  if (!trackCache.has(def.uid)) {
+    trackCache.set(
+      def.uid,
+      new Track(control, { subdiv: def.subdiv, trackWidth: tw })
+    );
+  }
+  return trackCache.get(def.uid);
+}
+
+let activeLevelUid = readInitialLevelUid();
+let track = buildTrackForLevel(activeLevelUid);
+
 class Car {
   constructor(x, y, angle, color, isPlayer, aiOffset = 0) {
     this.x = x;
@@ -306,12 +325,30 @@ function formatTime(sec) {
   return `${m}:${whole.toString().padStart(2, "0")}.${frac.toString().padStart(2, "0")}`;
 }
 
-const LEADERBOARD_KEY = "aneRacingTop10RaceTimes";
+const LEGACY_LEADERBOARD_KEY = "aneRacingTop10RaceTimes";
 const LEADERBOARD_MAX = 10;
 
-function parseLeaderboard() {
+function leaderboardStorageKey() {
+  return `aneRacingTop10_${activeLevelUid}`;
+}
+
+function parseLeaderboardForLevelUid(levelUid) {
   try {
-    const raw = localStorage.getItem(LEADERBOARD_KEY);
+    const def = getLevelByUid(levelUid);
+    let raw = localStorage.getItem(`aneRacingTop10_${def.uid}`);
+    if (!raw) {
+      raw = localStorage.getItem(`aneRacingTop10_${def.id}`);
+    }
+    if (!raw && def.id === LEVELS[0].id) {
+      raw = localStorage.getItem(LEGACY_LEADERBOARD_KEY);
+    }
+    if (raw) {
+      try {
+        if (!localStorage.getItem(`aneRacingTop10_${def.uid}`)) {
+          localStorage.setItem(`aneRacingTop10_${def.uid}`, raw);
+        }
+      } catch (_) {}
+    }
     if (!raw) return [];
     const parsed = JSON.parse(raw);
     if (!Array.isArray(parsed)) return [];
@@ -333,6 +370,10 @@ function parseLeaderboard() {
   }
 }
 
+function parseLeaderboard() {
+  return parseLeaderboardForLevelUid(activeLevelUid);
+}
+
 /** Saves this race finish; returns 1–10 if it made the top {LEADERBOARD_MAX} saved races, else null. */
 function recordRaceFinishTime(totalSec) {
   if (!Number.isFinite(totalSec) || totalSec <= 0) {
@@ -346,7 +387,7 @@ function recordRaceFinishTime(totalSec) {
     (a, b) => a.time - b.time || (a.ts || 0) - (b.ts || 0)
   );
   const next = rows.slice(0, LEADERBOARD_MAX);
-  localStorage.setItem(LEADERBOARD_KEY, JSON.stringify(next));
+  localStorage.setItem(leaderboardStorageKey(), JSON.stringify(next));
   const idx = next.findIndex((r) => r.ts === ts);
   const rank = idx >= 0 ? idx + 1 : null;
   renderLeaderboard(rank != null ? ts : null);
@@ -361,10 +402,10 @@ function renderLeaderboard(finishHighlightTs = null) {
   fillLeaderboardList(finishList, finishHighlightTs);
 }
 
-function fillLeaderboardList(listEl, highlightTs) {
+function fillLeaderboardList(listEl, highlightTs, dataOverride = null) {
   if (!listEl) return;
   listEl.innerHTML = "";
-  const data = parseLeaderboard();
+  const data = dataOverride != null ? dataOverride : parseLeaderboard();
   if (data.length === 0) {
     const li = document.createElement("li");
     li.className = "leaderboard-empty";
@@ -396,8 +437,6 @@ function fillLeaderboardList(listEl, highlightTs) {
 
 const canvas = document.getElementById("game");
 const ctx = canvas.getContext("2d");
-
-const track = new Track();
 
 /** Arc length from center[0] along the racing line to the closest point on the polyline (for position). */
 function distanceAlongTrack(x, y) {
@@ -445,7 +484,7 @@ function computePlayerPlace() {
 }
 
 // Grid follows the actual centerline backward from S/F — straight-line math left the track on curves.
-const GRID_LAT_MAX = track.width * 0.5 - CAR_R - 6;
+let GRID_LAT_MAX = track.width * 0.5 - CAR_R - 6;
 
 /**
  * Walk backward along the polyline from center[0], then offset perpendicular to local forward.
@@ -505,14 +544,28 @@ function gridSlotAlongTrack(distanceBack, lateral) {
   };
 }
 
-const GRID_LAT = GRID_LAT_MAX * 0.68;
-const GRID_SLOTS = [
-  gridSlotAlongTrack(172, -GRID_LAT * 0.72),
-  gridSlotAlongTrack(172, GRID_LAT * 0.72),
-  gridSlotAlongTrack(236, -GRID_LAT * 0.72),
-  gridSlotAlongTrack(236, GRID_LAT * 0.72),
-  gridSlotAlongTrack(324, 0),
-];
+let GRID_LAT = 0;
+/** @type {{ x: number, y: number, angle: number }[]} */
+let GRID_SLOTS = [];
+
+function recomputeGridSlots() {
+  const gridScale = clamp(track.length / 5200, 0.42, 1.15);
+  const d1 = 172 * gridScale;
+  const d2 = 236 * gridScale;
+  const d3 = 324 * gridScale;
+  GRID_LAT_MAX = track.width * 0.5 - CAR_R - 6;
+  GRID_LAT = GRID_LAT_MAX * 0.68;
+  GRID_SLOTS = [
+    gridSlotAlongTrack(d1, -GRID_LAT * 0.72),
+    gridSlotAlongTrack(d1, GRID_LAT * 0.72),
+    gridSlotAlongTrack(d2, -GRID_LAT * 0.72),
+    gridSlotAlongTrack(d2, GRID_LAT * 0.72),
+    gridSlotAlongTrack(d3, 0),
+  ];
+}
+
+recomputeGridSlots();
+
 const CAR_GRID_IDX = [4, 0, 1, 2, 3];
 
 const colors = ["#00e5ff", "#ff4081", "#7cff7c", "#ffd54f", "#b388ff"];
@@ -1249,9 +1302,7 @@ const state = {
   raceTotalTimeAtFinish: null,
   currentLapTime: 0,
   lastLapTime: null,
-  bestLap: Number(localStorage.getItem("aneRacingBestLap"))
-    ? parseFloat(localStorage.getItem("aneRacingBestLap"))
-    : null,
+  bestLap: null,
   prevPos: { x: player.x, y: player.y },
   camera: { x: 0, y: 0, zoom: 1 },
   /** Main menu or pause overlay is visible */
@@ -1261,12 +1312,60 @@ const state = {
   paused: false,
 };
 
+function loadBestLapFromStorage() {
+  const def = getLevelByUid(activeLevelUid);
+  let v = localStorage.getItem(`aneRacingBestLap_${def.uid}`);
+  if (v == null) {
+    v = localStorage.getItem(`aneRacingBestLap_${def.id}`);
+  }
+  if (v == null && def.id === LEVELS[0].id) {
+    v = localStorage.getItem("aneRacingBestLap");
+  }
+  state.bestLap =
+    v != null && !Number.isNaN(parseFloat(v)) ? parseFloat(v) : null;
+}
+
+function updateLeaderboardHeadingForTitle() {
+  const el = document.getElementById("leaderboard-track-label");
+  const def = getLevelByUid(activeLevelUid);
+  if (el) {
+    el.textContent = def.name;
+  }
+}
+
+/**
+ * @param {string} levelUid
+ * @param {{ repositionCars?: boolean, snapCamera?: boolean }} [options]
+ */
+function setActiveLevel(levelUid, options = {}) {
+  const { repositionCars = true, snapCamera = true } = options;
+  activeLevelUid = getLevelByUid(levelUid).uid;
+  track = buildTrackForLevel(activeLevelUid);
+  recomputeGridSlots();
+  try {
+    localStorage.setItem("aneRacingLastLevel", activeLevelUid);
+  } catch (_) {}
+  loadBestLapFromStorage();
+  if (repositionCars) {
+    prepareGridForRaceStart();
+  }
+  if (snapCamera) {
+    state.camera.x = player.x;
+    state.camera.y = player.y;
+  }
+  updateLeaderboardHeadingForTitle();
+}
+
+loadBestLapFromStorage();
+
 let preRaceCountdownIntervalId = null;
 let preRaceCountdownTimeoutId = null;
 let resumeCountdownIntervalId = null;
 let resumeCountdownTimeoutId = null;
-/** "main" | "audio" | "instructions" — nested menu screens */
+/** "main" | "audio" | "instructions" | "levels" — nested menu screens */
 let menuSubScreen = "main";
+/** Highlighted level in the picker (stable UUID, not list index). */
+let levelSelectUid = LEVELS[0].uid;
 
 const overlay = document.getElementById("overlay");
 const overlayTitle = document.getElementById("overlay-title");
@@ -1358,9 +1457,20 @@ function updateGameMenuPanels() {
   const pausePanel = document.getElementById("menu-panel-pause");
   const audioPanel = document.getElementById("menu-panel-audio");
   const instructionsPanel = document.getElementById("menu-panel-instructions");
+  const levelPanel = document.getElementById("menu-panel-level-select");
   if (!titlePanel || !pausePanel || !audioPanel || !instructionsPanel) return;
   const showTitle =
     state.mode === "title" && state.menuContext === "title" && state.menuOpen;
+
+  if (menuSubScreen === "levels") {
+    levelPanel?.classList.remove("hidden");
+    audioPanel.classList.add("hidden");
+    instructionsPanel.classList.add("hidden");
+    titlePanel.classList.add("hidden");
+    pausePanel.classList.add("hidden");
+    return;
+  }
+  levelPanel?.classList.add("hidden");
 
   if (menuSubScreen === "audio") {
     audioPanel.classList.remove("hidden");
@@ -1469,6 +1579,153 @@ function showTitleMenu() {
     });
   }
   renderLeaderboard(null);
+  updateLeaderboardHeadingForTitle();
+}
+
+function drawTrackPreviewCanvas(cnv, levelUid) {
+  if (!cnv) return;
+  const w = cnv.width;
+  const h = cnv.height;
+  const ctx = cnv.getContext("2d");
+  if (!ctx) return;
+  const tr = buildTrackForLevel(levelUid);
+  let minX = Infinity;
+  let minY = Infinity;
+  let maxX = -Infinity;
+  let maxY = -Infinity;
+  for (const p of tr.outer) {
+    minX = Math.min(minX, p.x);
+    minY = Math.min(minY, p.y);
+    maxX = Math.max(maxX, p.x);
+    maxY = Math.max(maxY, p.y);
+  }
+  for (const p of tr.inner) {
+    minX = Math.min(minX, p.x);
+    minY = Math.min(minY, p.y);
+    maxX = Math.max(maxX, p.x);
+    maxY = Math.max(maxY, p.y);
+  }
+  const bw = maxX - minX;
+  const bh = maxY - minY;
+  const pad = 26;
+  const s = Math.min((w - pad * 2) / bw, (h - pad * 2) / bh);
+  const cx = (minX + maxX) / 2;
+  const cy = (minY + maxY) / 2;
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.clearRect(0, 0, w, h);
+  ctx.fillStyle = "#0d1219";
+  ctx.fillRect(0, 0, w, h);
+  ctx.setTransform(s, 0, 0, s, w / 2 - cx * s, h / 2 - cy * s);
+  ctx.beginPath();
+  ctx.moveTo(tr.outer[0].x, tr.outer[0].y);
+  for (let i = 1; i <= tr.n; i++) {
+    const p = tr.outer[i % tr.n];
+    ctx.lineTo(p.x, p.y);
+  }
+  ctx.moveTo(tr.inner[0].x, tr.inner[0].y);
+  for (let i = 1; i <= tr.n; i++) {
+    const p = tr.inner[i % tr.n];
+    ctx.lineTo(p.x, p.y);
+  }
+  ctx.closePath();
+  const grd = ctx.createLinearGradient(minX, minY, maxX, maxY);
+  grd.addColorStop(0, "#2d333f");
+  grd.addColorStop(1, "#1a1e28");
+  ctx.fillStyle = grd;
+  ctx.fill("evenodd");
+  ctx.strokeStyle = "rgba(255,255,255,0.55)";
+  ctx.lineWidth = 3 / s;
+  ctx.beginPath();
+  ctx.moveTo(tr.outer[0].x, tr.outer[0].y);
+  for (let i = 1; i <= tr.n; i++) {
+    ctx.lineTo(tr.outer[i % tr.n].x, tr.outer[i % tr.n].y);
+  }
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.moveTo(tr.inner[0].x, tr.inner[0].y);
+  for (let i = 1; i <= tr.n; i++) {
+    ctx.lineTo(tr.inner[i % tr.n].x, tr.inner[i % tr.n].y);
+  }
+  ctx.stroke();
+  ctx.setLineDash([10 / s, 8 / s]);
+  ctx.strokeStyle = "rgba(255,255,255,0.2)";
+  ctx.lineWidth = 2 / s;
+  ctx.beginPath();
+  ctx.moveTo(tr.center[0].x, tr.center[0].y);
+  for (let i = 1; i <= tr.n; i++) {
+    ctx.lineTo(tr.center[i % tr.n].x, tr.center[i % tr.n].y);
+  }
+  ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+}
+
+function syncLevelSelectUi() {
+  const big = document.getElementById("level-preview-canvas");
+  drawTrackPreviewCanvas(big, levelSelectUid);
+  const L = getLevelByUid(levelSelectUid);
+  const nameEl = document.getElementById("level-preview-name");
+  const tagEl = document.getElementById("level-preview-tag");
+  if (nameEl) nameEl.textContent = L.name;
+  if (tagEl) tagEl.textContent = L.tagline;
+  const lbEl = document.getElementById("leaderboard-list-level-select");
+  if (lbEl) {
+    fillLeaderboardList(lbEl, null, parseLeaderboardForLevelUid(levelSelectUid));
+  }
+  document.querySelectorAll("[data-level-uid]").forEach((row) => {
+    const u = row.getAttribute("data-level-uid");
+    row.classList.toggle("level-select-row--active", u === levelSelectUid);
+  });
+}
+
+function populateLevelSelectList() {
+  const container = document.getElementById("level-select-list");
+  if (!container) return;
+  container.innerHTML = "";
+  LEVELS.forEach((Lv) => {
+    const row = document.createElement("button");
+    row.type = "button";
+    row.className = "level-select-row";
+    row.setAttribute("data-level-uid", Lv.uid);
+    row.innerHTML =
+      '<canvas class="level-thumb-canvas" width="112" height="72" aria-hidden="true"></canvas>' +
+      '<span class="level-select-row-text">' +
+      `<span class="level-select-row-name">${Lv.name}</span>` +
+      `<span class="level-select-row-tag">${Lv.tagline}</span>` +
+      "</span>";
+    row.addEventListener("click", () => {
+      levelSelectUid = Lv.uid;
+      syncLevelSelectUi();
+    });
+    container.appendChild(row);
+    const thumb = row.querySelector(".level-thumb-canvas");
+    drawTrackPreviewCanvas(thumb, Lv.uid);
+  });
+}
+
+function showLevelSelectMenu() {
+  menuSubScreen = "levels";
+  state.menuOpen = true;
+  state.menuContext = "title";
+  levelSelectUid = activeLevelUid;
+  syncLevelSelectUi();
+  updateGameMenuPanels();
+  if (gameMenuOverlayEl) {
+    applyGameMenuOverlay(gameMenuOverlayEl);
+    syncPauseSliderElements();
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        syncPauseSliderElements();
+        if (gameMenuOverlayEl) void gameMenuOverlayEl.offsetHeight;
+      });
+    });
+  }
+}
+
+function startRaceFromLevelSelect() {
+  setActiveLevel(levelSelectUid);
+  menuSubScreen = "main";
+  startSequence();
 }
 
 function openRaceOrCountdownMenu() {
@@ -1781,7 +2038,13 @@ function checkCarLap(car, prev, curr) {
   state.lastLapTime = lapTime;
   if (state.bestLap == null || lapTime < state.bestLap) {
     state.bestLap = lapTime;
-    localStorage.setItem("aneRacingBestLap", String(lapTime));
+    const def = getLevelByUid(activeLevelUid);
+    try {
+      localStorage.setItem(`aneRacingBestLap_${def.uid}`, String(lapTime));
+      if (def.id === LEVELS[0].id) {
+        localStorage.setItem("aneRacingBestLap", String(lapTime));
+      }
+    } catch (_) {}
   }
   state.lapStartTime = now;
   state.lap = player.raceLap;
@@ -1828,6 +2091,12 @@ window.addEventListener("keydown", (e) => {
       exitMenuSubscreen();
       return;
     }
+    if (state.menuOpen && menuSubScreen === "levels") {
+      e.preventDefault();
+      menuSubScreen = "main";
+      updateGameMenuPanels();
+      return;
+    }
     if (state.menuOpen) {
       if (state.menuContext === "title") {
         e.preventDefault();
@@ -1865,8 +2134,12 @@ window.addEventListener("keydown", (e) => {
         exitMenuSubscreen();
         return;
       }
+      if (menuSubScreen === "levels") {
+        startRaceFromLevelSelect();
+        return;
+      }
       if (state.menuContext === "title") {
-        startSequence();
+        showLevelSelectMenu();
         return;
       }
       resumeFromGameMenu();
@@ -2016,13 +2289,29 @@ if (gameMenuOverlayEl) {
       exitMenuSubscreen();
       return;
     }
+    if (menuSubScreen === "levels") {
+      menuSubScreen = "main";
+      updateGameMenuPanels();
+      return;
+    }
     if (state.menuContext === "title") return;
     resumeFromGameMenu();
   });
 }
 
 document.getElementById("btn-new-game")?.addEventListener("click", () => {
-  if (state.mode === "title") startSequence();
+  if (state.mode === "title") showLevelSelectMenu();
+});
+document.getElementById("btn-level-back")?.addEventListener("click", () => {
+  if (menuSubScreen === "levels") {
+    menuSubScreen = "main";
+    updateGameMenuPanels();
+  }
+});
+document.getElementById("btn-level-start")?.addEventListener("click", () => {
+  if (menuSubScreen === "levels" && state.mode === "title") {
+    startRaceFromLevelSelect();
+  }
 });
 document.getElementById("btn-title-instructions")?.addEventListener("click", () => showInstructionsSubmenu());
 document.getElementById("btn-pause-instructions")?.addEventListener("click", () => showInstructionsSubmenu());
@@ -2060,6 +2349,7 @@ if (window.electronShell?.onFullscreenChange) {
 }
 void syncFullscreenButtonLabels();
 
+populateLevelSelectList();
 initPickups();
 showTitleMenu();
 
